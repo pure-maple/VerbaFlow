@@ -1,140 +1,204 @@
-const DB_NAME = 'VerbaFlowDB';
-const DB_VERSION = 1;
-const STORE_PROJECTS = 'projects';
-const STORE_CHATS = 'chats';
+import Dexie, { Table } from 'dexie';
+import { ChatSession, GlossarySet, VocabItem, AnalysisResult, AppStep, FileSource } from '../types';
+
+// Define Database Schema Interfaces
+export interface WorkspaceState {
+  id: string; // 'current'
+  step: AppStep;
+  srtContent: string;
+  analysisResult: AnalysisResult | null;
+  confirmedVocab: VocabItem[];
+  subtitleOutput: string; // Separate output for Step 3
+  markdownOutput: string; // Separate output for Step 4
+  updatedAt: number;
+}
+
+export interface FileStorage {
+  id: string; // 'current_files'
+  
+  audioBlob: Blob | null;
+  audioName: string | null;
+  audioType: string | null;
+  audioSource: FileSource;
+  audioDriveId?: string;
+
+  videoBlob: Blob | null;
+  videoName: string | null;
+  videoType: string | null;
+  videoSource: FileSource;
+  videoDriveId?: string;
+
+  srtBlob: Blob | null;
+  srtSource: FileSource;
+  srtDriveId?: string;
+  
+  updatedAt: number;
+}
 
 export interface StorageStats {
   projectSize: number;
   chatCount: number;
+  glossaryCount: number;
 }
 
+class VerbaFlowDatabase extends Dexie {
+  workspace!: Table<WorkspaceState, string>;
+  files!: Table<FileStorage, string>;
+  chats!: Table<ChatSession, string>;
+  glossarySets!: Table<GlossarySet, string>;
+
+  constructor() {
+    super('VerbaFlowDB_v5'); // Incremented version for Schema change
+    (this as any).version(1).stores({
+      workspace: 'id',
+      files: 'id',
+      chats: 'id, title, createdAt',
+      glossarySets: 'id, title, tags'
+    });
+  }
+}
+
+export const db = new VerbaFlowDatabase();
+
 class StorageService {
-  private db: IDBDatabase | null = null;
-
-  async init(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
-          db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains(STORE_CHATS)) {
-          db.createObjectStore(STORE_CHATS, { keyPath: 'id' });
-        }
-      };
+  
+  // --- Workspace State (JSON Data) ---
+  
+  async saveWorkspaceState(state: Partial<WorkspaceState>) {
+    // Merge with existing state to avoid wiping fields not passed
+    const existing: Partial<WorkspaceState> = await db.workspace.get('current') || {};
+    
+    await db.workspace.put({
+      id: 'current',
+      step: state.step ?? existing.step ?? AppStep.UPLOAD,
+      srtContent: state.srtContent ?? existing.srtContent ?? '',
+      analysisResult: state.analysisResult ?? existing.analysisResult ?? null,
+      confirmedVocab: state.confirmedVocab ?? existing.confirmedVocab ?? [],
+      subtitleOutput: state.subtitleOutput ?? existing.subtitleOutput ?? '',
+      markdownOutput: state.markdownOutput ?? existing.markdownOutput ?? '',
+      updatedAt: Date.now()
     });
   }
 
-  private async getStore(storeName: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore> {
-    if (!this.db) await this.init();
-    const transaction = this.db!.transaction(storeName, mode);
-    return transaction.objectStore(storeName);
+  async loadWorkspaceState(): Promise<WorkspaceState | undefined> {
+    return await db.workspace.get('current');
   }
 
-  // --- Generic Methods ---
-
-  async save(storeName: string, data: any): Promise<void> {
-    const store = await this.getStore(storeName, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.put(data);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async get(storeName: string, key: string | number): Promise<any> {
-    const store = await this.getStore(storeName);
-    return new Promise((resolve, reject) => {
-      const request = store.get(key);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async getAll(storeName: string): Promise<any[]> {
-    const store = await this.getStore(storeName);
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async delete(storeName: string, key: string | number): Promise<void> {
-    const store = await this.getStore(storeName, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.delete(key);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async clear(storeName: string): Promise<void> {
-    const store = await this.getStore(storeName, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.clear();
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  // --- Specific Operations ---
-
-  async saveWorkspaceState(state: any) {
-    // We store the current workspace state with a fixed ID 'current'
-    // To avoid circular structure or issues, ensure state is serializable
-    const serialized = JSON.parse(JSON.stringify(state));
-    await this.save(STORE_PROJECTS, { id: 'current', ...serialized, updatedAt: Date.now() });
-  }
-
-  async loadWorkspaceState() {
-    return await this.get(STORE_PROJECTS, 'current');
-  }
-
-  async saveChats(chats: any[]) {
-     // We can store all chats as one array or individual items. 
-     // For performance with many chats, individual is better, but for simplicity compatible with current app structure:
-     // We will store the array wrapper for now, or loop.
-     // Let's store individual chats to allow easier management later.
-     const tx = this.db!.transaction(STORE_CHATS, 'readwrite');
-     const store = tx.objectStore(STORE_CHATS);
-     
-     // Clear old and rewrite (simple sync strategy)
-     // In a real robust app, we'd update diffs.
-     // For now, let's just save the whole array as a single object 'chat_history' to match localStorage behavior logic
-     // but inside IDB to bypass size limits.
-     store.put({ id: 'chat_history', data: chats });
-  }
-
-  async loadChats() {
-    const result = await this.get(STORE_CHATS, 'chat_history');
-    return result ? result.data : [];
-  }
-
-  async getStats(): Promise<StorageStats> {
-      if (!this.db) await this.init();
+  // --- File Storage ---
+  
+  async saveFiles(
+    audio: { file: File | null, source: FileSource, driveId?: string },
+    video: { file: File | null, source: FileSource, driveId?: string },
+    srt: { file: File | null, source: FileSource, driveId?: string }
+  ) {
+    await db.files.put({
+      id: 'current_files',
       
-      // Calculate roughly
-      const workspace = await this.get(STORE_PROJECTS, 'current');
-      const chats = await this.get(STORE_CHATS, 'chat_history');
+      audioBlob: audio.file, 
+      audioName: audio.file ? audio.file.name : (audio.driveId ? 'Drive Audio' : null),
+      audioType: audio.file ? audio.file.type : null,
+      audioSource: audio.source,
+      audioDriveId: audio.driveId,
+
+      videoBlob: video.file,
+      videoName: video.file ? video.file.name : (video.driveId ? 'Drive Video' : null),
+      videoType: video.file ? video.file.type : null,
+      videoSource: video.source,
+      videoDriveId: video.driveId,
+
+      srtBlob: srt.file,
+      srtSource: srt.source,
+      srtDriveId: srt.driveId,
       
-      const projectSize = workspace ? new Blob([JSON.stringify(workspace)]).size : 0;
-      const chatCount = chats?.data ? chats.data.length : 0;
-      
-      return { projectSize, chatCount };
+      updatedAt: Date.now()
+    });
+  }
+
+  async loadFiles(): Promise<{ 
+      audio: { file: File | null, source: FileSource, driveId?: string }, 
+      video: { file: File | null, source: FileSource, driveId?: string }, 
+      srt: { file: File | null, source: FileSource, driveId?: string } 
+  } | null> {
+    const record = await db.files.get('current_files');
+    if (!record) return null;
+
+    let audioFile: File | null = null;
+    if (record.audioBlob && record.audioName) {
+        audioFile = new File([record.audioBlob], record.audioName, { type: record.audioType || undefined });
+    }
+
+    let videoFile: File | null = null;
+    if (record.videoBlob && record.videoName) {
+        videoFile = new File([record.videoBlob], record.videoName, { type: record.videoType || undefined });
+    }
+
+    let srtFile: File | null = null;
+    if (record.srtBlob) {
+        srtFile = new File([record.srtBlob], "uploaded.srt", { type: "text/plain" });
+    }
+
+    return { 
+        audio: { file: audioFile, source: record.audioSource || 'local', driveId: record.audioDriveId }, 
+        video: { file: videoFile, source: record.videoSource || 'local', driveId: record.videoDriveId },
+        srt: { file: srtFile, source: record.srtSource || 'local', driveId: record.srtDriveId }
+    };
+  }
+
+  // --- Chats ---
+
+  async saveChats(chats: ChatSession[]) {
+    await db.chats.bulkPut(chats);
+  }
+
+  async loadChats(): Promise<ChatSession[]> {
+    return await db.chats.orderBy('createdAt').reverse().toArray();
   }
   
-  async clearAllData() {
-      await this.clear(STORE_PROJECTS);
-      await this.clear(STORE_CHATS);
+  async deleteChat(id: string) {
+      await db.chats.delete(id);
+  }
+  
+  async saveChatSession(session: ChatSession) {
+      await db.chats.put(session);
+  }
+
+  // --- Glossary ---
+
+  async saveGlossarySet(set: GlossarySet) {
+    await db.glossarySets.put({ ...set, updatedAt: Date.now() });
+  }
+
+  async getAllGlossarySets(): Promise<GlossarySet[]> {
+    return await db.glossarySets.toArray();
+  }
+
+  async deleteGlossarySet(id: string) {
+    await db.glossarySets.delete(id);
+  }
+
+  // --- Utility ---
+
+  async getStats(): Promise<StorageStats> {
+    const chatCount = await db.chats.count();
+    const glossaryCount = await db.glossarySets.count();
+    
+    const fileRec = await db.files.get('current_files');
+    let size = 0;
+    if (fileRec?.audioBlob) size += fileRec.audioBlob.size;
+    if (fileRec?.videoBlob) size += fileRec.videoBlob.size;
+    
+    return { projectSize: size, chatCount, glossaryCount };
+  }
+
+  async clear(storeName: 'projects' | 'chats' | 'glossary') {
+    if (storeName === 'projects') {
+        await db.workspace.clear();
+        await db.files.clear();
+    } else if (storeName === 'chats') {
+        await db.chats.clear();
+    } else if (storeName === 'glossary') {
+        await db.glossarySets.clear();
+    }
   }
 }
 

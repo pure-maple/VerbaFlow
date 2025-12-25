@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
 export const translations = {
   en: {
@@ -6,7 +7,8 @@ export const translations = {
     appSubtitle: "AI Terminology & Transcript Suite",
     nav: {
       studio: "Workspace",
-      glossary: "Knowledge Base",
+      glossary: "Terminology",
+      agents: "Agent Hub",
       drive: "Save to Drive",
       expand: "Expand Sidebar",
       collapse: "Collapse Sidebar",
@@ -16,29 +18,57 @@ export const translations = {
     },
     steps: {
       upload: "Upload",
-      analysis: "Analysis",
-      confirm: "Review",
-      genSRT: "Gen SRT",
+      // analysis: "Analysis", // Removed
+      confirm: "Smart Proofread",
+      genSRT: "Gen Subtitle",
       genMD: "Gen Doc"
     },
     config: {
-      title: "Configuration",
+      title: "System Settings",
+      systemSettings: "System Settings",
+      geminiSection: "Gemini API (LLM)",
+      apiKey: "API Key",
+      baseUrl: "Base URL (Optional)",
+      baseUrlHelp: "Useful for compatible proxies. Leave empty to use Google's official endpoint.",
+      driveSection: "Google Drive Integration",
+      driveClientId: "Client ID",
+      driveApiKey: "API Key (Drive Scope)",
+      driveHelp: "Requires 'drive.file' scope enabled in Google Cloud Console. Usage is free for personal use.",
+      storageSection: "Local Data Storage",
+      storageDesc: "Manage IndexedDB storage size and history.",
+      manageBtn: "Manage",
+      saveBtn: "Save & Close",
       modelLabel: "Work Model",
       modelFast: "Gemini 3.0 Flash (Fast)",
       modelSmart: "Gemini 3.0 Pro (High Reasoning)",
       languageLabel: "Output Language",
       customModel: "Custom...",
-      customPlaceholder: "e.g. gemini-2.5-flash"
+      customPlaceholder: "e.g. gemini-2.5-flash",
+      // Dev Mode
+      devModeTitle: "Developer Mode / Temp Access",
+      devModeDesc: "In cloud IDEs (Bolt, StackBlitz), domain verification fails. To bypass, get a temporary token from Google OAuth Playground (Select Drive API v3) and paste it below.",
+      devModePlaceholder: "Paste Access Token (ya29...)",
+      devModeActive: "Manual Token Active - OAuth origin check bypassed.",
+      devModeOptional: "Optional if using Dev Token"
     },
     upload: {
       title: "Step 1: Upload Materials",
-      audioLabel: "Upload Media",
-      audioSub: "Audio (MP3, WAV) or Video (MP4, MOV)",
-      audioReceived: "Media Ready",
-      srtLabel: "Upload SRT File",
-      srtSub: "Required for timestamps",
-      srtReceived: "Subtitles Received",
-      startBtn: "Start Analysis"
+      videoLabel: "Video Source",
+      audioLabel: "Audio Source",
+      srtLabel: "Subtitle Source",
+      dragDrop: "Drag & Drop or Click",
+      browse: "Browse",
+      analyzing: "Analyze with AI",
+      localPreview: "Local Preview Only",
+      startBtn: "Start Studio",
+      videoRec: "Video Ready",
+      audioRec: "Audio Ready",
+      srtRec: "Subtitle Ready",
+      fileTypeVideo: "MP4, MOV, WEBM",
+      fileTypeAudio: "MP3, WAV, M4A",
+      fileTypeSrt: ".SRT, .VTT, .ASS, .JSON",
+      srTWarningTitle: "Notice regarding Subtitle & AI Analysis",
+      srtWarningDesc: "Without a subtitle file, AI cannot perform text-based analysis or timestamp correction. Local media files are used for preview only and are NOT uploaded to the AI. You can still proceed for manual review or to use the Agent.",
     },
     analysis: {
       loadingTitle: "Analyzing Content...",
@@ -51,14 +81,20 @@ export const translations = {
       duration: "Duration",
       speakers: "Speakers",
       agenda: "Agenda",
-      step3Title: "Step 3: Vocabulary Review",
+      step3Title: "Step 2: Smart Proofread",
       needsAttention: "items need attention",
-      extraContextLabel: "Extra Context / Instructions for AI",
-      extraContextPlaceholder: "E.g., 'The speaker has a heavy accent', 'Use British spelling', etc.",
-      glossaryBtn: "Check Glossary",
+      extraContextLabel: "AI Instructions / Context",
+      extraContextPlaceholder: "E.g., 'The speaker has a heavy accent', 'Use British spelling', or add specific background info...",
+      glossaryBtn: "Select Glossary",
       reAnalyzeBtn: "AI Re-check",
+      fixTimeBtn: "Fix Timestamps",
       resetBtn: "Reset All",
-      confirmAllBtn: "Confirm All",
+      confirmAllBtn: "Generate",
+      formatLabel: "Format:",
+      askAgent: "Ask Agent",
+      detailEdit: "Edit Details",
+      extractBtn: "Extract to Glossary",
+      instructionsBtn: "AI Instructions",
       table: {
         play: "Play",
         time: "Time",
@@ -66,47 +102,145 @@ export const translations = {
         corrected: "Corrected",
         type: "Type",
         status: "Status",
-        remarks: "Remarks"
+        remarks: "User Note",
+        detail: "Edit"
       },
       statusOptions: {
         verified: "✅ Verified",
-        confirm: "⚠️ Confirm",
-        check: "ℹ️ Check",
-        custom: "✏️ Custom"
+        confirm: "⚠️ Needs Human Confirm",
+        check: "ℹ️ Check Spelling",
+        custom: "✏️ Custom Status",
+        ai_recheck: "🤖 Needs AI Confirm"
       },
-      nextStepBtn: "Next: Generate SRT",
+      nextStepBtn: "Next: Generate Subtitle",
       noSubtitle: "No subtitle...",
-      videoControls: {
-        prev: "Prev Line",
-        next: "Next Line"
+      detailPanel: {
+        title: "Edit Term Detail",
+        context: "Context Preview",
+        aiReason: "AI Reason / Original Note",
+        userNote: "Your Note / Instruction",
+        correction: "Correction",
+        save: "Save Changes"
+      },
+      postConfirm: {
+        title: "Update Glossary?",
+        desc: "Do you want to extract these confirmed terms to your glossary?",
+        newSet: "Create New Set",
+        addTo: "Add to Existing",
+        skip: "Skip"
+      },
+      extractModal: {
+        title: "Extract Terms to Glossary",
+        desc: "Extract the current validated terms into a glossary set for future reuse.",
+        newSet: "Create New Set",
+        addTo: "Add to Existing Set",
+        confirm: "Extract",
+        cancel: "Cancel",
+        processing: "Processing in background..."
+      },
+      instructionModal: {
+        title: "AI Instructions & Context",
+        desc: "Provide extra context or rules for the AI (e.g., 'Speaker is from Boston', 'Keep slang').",
+        placeholder: "Enter instructions...",
+        save: "Save & Apply"
       }
     },
+    videoControls: {
+      prev: "Prev Line",
+      next: "Next Line",
+      attach: "Attach Media",
+      detach: "Remove Media",
+      attachTitle: "Upload local media",
+      expand: "Expand View",
+      collapse: "Compact View",
+      captions: "Toggle Captions",
+      layoutOverlay: "Overlay Layout",
+      layoutSide: "Side-by-Side Layout",
+      switchToAudio: "Switch to Audio",
+      switchToVideo: "Switch to Video"
+    },
     glossary: {
-      title: "Knowledge Base",
-      importBtn: "Import Terms",
-      exportBtn: "AI Smart Extraction",
-      mergeBtn: "Merge to Session",
-      term: "Term",
-      definition: "Context/Definition",
-      empty: "No glossary terms yet. Import or generate them from Analysis.",
-      analyzing: "AI is summarizing glossary...",
+      title: "Terminology Management",
+      subtitle: "Create, classify, and manage multiple glossary sets for different scenarios.",
+      searchPlaceholder: "Search sets by name or tag...",
+      createBtn: "New Set",
+      importBtn: "Smart Import",
+      deleteSelected: "Delete Selected",
+      noSetsFound: "No glossary sets found. Create one or start an analysis to extract terms.",
+      extractModal: {
+        title: "Smart Extraction Config",
+        source: "Source Content",
+        target: "Target Destination",
+        createNew: "Create New Glossary Set",
+        appendTo: "Append to Current Set",
+        confirm: "Start Extraction",
+        cancel: "Cancel",
+        warning: "Please select a glossary set to append to."
+      },
+      importModal: {
+        title: "Smart Import / Extraction",
+        desc: "Upload a file or paste text. AI will structure terms and definitions automatically.",
+        tabFile: "File Upload",
+        tabText: "Paste Text",
+        contextLabel: "Context / Background (Optional)",
+        contextPlaceholder: "E.g. This is a medical document about cardiology...",
+        previewTitle: "Preview & Confirm",
+        targetSet: "Target Set",
+        newSet: "New Set",
+        existingSet: "Append to: ",
+        btnAnalyze: "Analyze & Structure",
+        btnSave: "Confirm Import",
+        filePlaceholder: "Drag file or click to upload (TXT, CSV, PDF, DOCX...)"
+      },
+      columns: {
+        name: "Set Name",
+        tags: "Tags",
+        count: "Terms",
+        updated: "Last Updated",
+        actions: "Actions"
+      },
+      modal: {
+        createTitle: "Create Glossary Set",
+        editTitle: "Edit Glossary Set",
+        nameLabel: "Name",
+        tagsLabel: "Tags (comma separated)",
+        descLabel: "Description",
+        cancel: "Cancel",
+        save: "Save"
+      },
+      detail: {
+        back: "Back to Library",
+        addItem: "Add Term",
+        importCSV: "Import Text",
+        empty: "No terms in this set yet.",
+        termHeader: "Term",
+        defHeader: "Definition / Remarks"
+      },
       driveSync: "Sync to Drive"
     },
+    agents: {
+      title: "Agent Hub",
+      subtitle: "Manage your specialized AI agents and conversation history.",
+      newChat: "New Chat",
+      placeholder: "Select a chat to start messaging...",
+      searchPlaceholder: "Search conversations...",
+      modelSelect: "Model"
+    },
     srt: {
-      title: "Step 4: Generate Polished SRT",
-      desc: "AI is rewriting the SRT file while maintaining strict timestamp integrity.",
-      download: "Download .SRT",
+      title: "Step 3: Generate Polished Subtitle",
+      desc: "AI is rewriting the subtitle file while maintaining strict timestamp integrity.",
+      download: "Download Subtitle",
       next: "Next: Generate Document"
     },
     transcript: {
-      title: "Step 5: Final Transcript",
+      title: "Step 4: Final Transcript",
       exportBtn: "Export Markdown",
       waiting: "Waiting for generation to start...",
       complete: "Transcription Complete",
       startNew: "Start New Task"
     },
     chat: {
-      title: "AI Assistant",
+      title: "Quick Assist",
       newChat: "New",
       history: "History",
       inputPlaceholder: "Ask me anything...",
@@ -125,9 +259,13 @@ export const translations = {
       desc: "Local data is stored in your browser's IndexedDB. Clear it to free up space.",
       workspace: "Current Workspace",
       chats: "Chat History",
+      glossarySets: "Glossary Sets",
+      manageTab: "Manage in Tab",
       clearBtn: "Clear Data",
       size: "Est. Size",
       count: "Items",
+      unit: "items",
+      unitSets: "sets",
       empty: "No data stored."
     },
     errors: {
@@ -140,7 +278,8 @@ export const translations = {
     appSubtitle: "AI 语流 · 术语管理与校对套件",
     nav: {
       studio: "智能工坊",
-      glossary: "术语知识库",
+      glossary: "术语管理",
+      agents: "智能体中心",
       drive: "存至 Drive",
       expand: "展开侧边栏",
       collapse: "折叠",
@@ -150,29 +289,57 @@ export const translations = {
     },
     steps: {
       upload: "上传素材",
-      analysis: "智能分析",
-      confirm: "人工复核",
+      // analysis: "智能分析", // Removed
+      confirm: "智能校对",
       genSRT: "生成字幕",
       genMD: "生成文稿"
     },
     config: {
-      title: "参数配置",
+      title: "系统设置",
+      systemSettings: "系统设置",
+      geminiSection: "Gemini API (大模型配置)",
+      apiKey: "API Key (密钥)",
+      baseUrl: "Base URL (代理地址/可选)",
+      baseUrlHelp: "用于兼容的第三方代理地址。留空则使用 Google 官方接口。",
+      driveSection: "Google Drive 集成",
+      driveClientId: "Client ID (客户端 ID)",
+      driveApiKey: "API Key (Drive 权限)",
+      driveHelp: "需要在 Google Cloud Console 中启用 'drive.file' 权限范围。个人使用通常免费。",
+      storageSection: "本地数据存储",
+      storageDesc: "管理 IndexedDB 存储占用与历史记录。",
+      manageBtn: "管理",
+      saveBtn: "保存并关闭",
       modelLabel: "工作模型",
       modelFast: "Gemini 3.0 Flash (快速)",
       modelSmart: "Gemini 3.0 Pro (高推理)",
       languageLabel: "输出语言",
       customModel: "自定义...",
-      customPlaceholder: "例如：gemini-2.5-flash"
+      customPlaceholder: "例如：gemini-2.5-flash",
+      // Dev Mode
+      devModeTitle: "开发者模式 / 临时访问令牌",
+      devModeDesc: "在 Bolt/StackBlitz 等云端 IDE 中，Google 域名验证会失败。请前往 Google OAuth Playground (选择 Drive API v3) 获取临时 Access Token 并粘贴在下方。",
+      devModePlaceholder: "粘贴 Access Token (ya29...)",
+      devModeActive: "手动 Token 已激活 - 无需域名验证",
+      devModeOptional: "使用临时令牌时，此项可选"
     },
     upload: {
       title: "第一步：上传素材",
-      audioLabel: "上传媒体文件",
-      audioSub: "音频 (MP3, WAV) 或 视频 (MP4, MOV)",
-      audioReceived: "媒体已就绪",
-      srtLabel: "上传 SRT 字幕",
-      srtSub: "必须用于提取时间轴",
-      srtReceived: "字幕已就绪",
-      startBtn: "开始分析"
+      videoLabel: "视频素材",
+      audioLabel: "音频素材",
+      srtLabel: "字幕文件",
+      dragDrop: "拖拽文件或点击上传",
+      browse: "浏览文件",
+      analyzing: "提交 AI 分析",
+      localPreview: "仅本地预览",
+      startBtn: "进入工作台",
+      videoRec: "视频已就绪",
+      audioRec: "音频已就绪",
+      srtRec: "字幕已就绪",
+      fileTypeVideo: "支持 MP4, MOV, WEBM",
+      fileTypeAudio: "支持 MP3, WAV, M4A",
+      fileTypeSrt: ".SRT, .VTT, .ASS, .JSON",
+      srTWarningTitle: "关于字幕文件与 AI 分析",
+      srtWarningDesc: "未上传字幕文件将影响时间轴的精准定位和自动校对功能。本地音视频素材默认不上传至 AI，仅用于本地预览。您仍可进入工作台进行人工复核或使用 AI 助手。",
     },
     analysis: {
       loadingTitle: "正在分析内容...",
@@ -185,62 +352,166 @@ export const translations = {
       duration: "时长",
       speakers: "发言人",
       agenda: "议程",
-      step3Title: "第三步：词汇复核与管理",
+      step3Title: "第二步：智能复核与校对",
       needsAttention: "项需关注",
       extraContextLabel: "额外说明 / 给 AI 的指令",
       extraContextPlaceholder: "例如：'演讲者有口音'，'保留口语化表达'，或者补充背景信息...",
-      glossaryBtn: "查看术语库",
+      glossaryBtn: "选择术语库",
       reAnalyzeBtn: "AI 二次复核",
-      resetBtn: "重置初始状态",
-      confirmAllBtn: "一键确认",
+      fixTimeBtn: "校准时间",
+      resetBtn: "重置",
+      confirmAllBtn: "开始生成",
+      formatLabel: "格式：",
+      askAgent: "询问助手",
+      detailEdit: "详情/编辑",
+      extractBtn: "提取入库",
+      instructionsBtn: "AI 指令",
       table: {
         play: "播放",
         time: "时间",
         original: "原文",
-        corrected: "修正 (可编辑)",
+        corrected: "修正",
         type: "类型",
         status: "状态",
-        remarks: "备注"
+        remarks: "用户备注/指令",
+        detail: "编辑"
       },
       statusOptions: {
         verified: "✅ 已确认",
-        confirm: "⚠️ 需确认",
+        confirm: "⚠️ 需人工确认",
         check: "ℹ️ 待拼写检查",
-        custom: "✏️ 自定义"
+        custom: "✏️ 自定义",
+        ai_recheck: "🤖 需 AI 确认"
       },
-      nextStepBtn: "下一步：生成 SRT 字幕",
+      nextStepBtn: "下一步：生成字幕文件",
       noSubtitle: "暂无字幕...",
-      videoControls: {
-        prev: "上一句",
-        next: "下一句"
+      detailPanel: {
+        title: "编辑术语详情",
+        context: "上下文预览",
+        aiReason: "AI 原始分析/理由",
+        userNote: "您的备注 / 给 AI 的指令",
+        correction: "修正内容 (多行)",
+        save: "保存更改"
+      },
+      postConfirm: {
+        title: "更新术语库？",
+        desc: "是否将这些确认后的术语提取到术语库中？",
+        newSet: "新建术语库",
+        addTo: "追加到现有库",
+        skip: "跳过"
+      },
+      extractModal: {
+        title: "提取术语至库",
+        desc: "将当前已验证的术语提取到术语库集合中，以便未来复用。",
+        newSet: "新建术语库",
+        addTo: "添加到现有库",
+        confirm: "后台提取",
+        cancel: "取消",
+        processing: "AI 正在后台提取术语..."
+      },
+      instructionModal: {
+        title: "AI 指令与上下文",
+        desc: "为 AI 提供额外的背景信息或规则 (例如: '演讲者来自波士顿', '保留俚语', '不要翻译人名').",
+        placeholder: "输入指令...",
+        save: "保存并应用"
       }
     },
+    videoControls: {
+        prev: "上一句",
+        next: "下一句",
+        attach: "关联媒体",
+        detach: "移除媒体",
+        attachTitle: "上传本地媒体",
+        expand: "展开大屏",
+        collapse: "收起",
+        captions: "显示/隐藏字幕",
+        layoutOverlay: "悬浮字幕模式",
+        layoutSide: "侧边字幕模式",
+        switchToAudio: "切换至音频",
+        switchToVideo: "切换至视频"
+    },
     glossary: {
-      title: "术语知识库",
-      importBtn: "导入术语",
-      exportBtn: "AI 智能提取",
-      mergeBtn: "应用到当前会话",
-      term: "术语",
-      definition: "上下文/定义",
-      empty: "暂无术语。请导入或在分析阶段通过 AI 提取。",
-      analyzing: "AI 正在总结生成术语库...",
+      title: "术语库管理",
+      subtitle: "创建、分类和管理适用于不同场景的术语集合。",
+      searchPlaceholder: "搜索术语库名称或标签...",
+      createBtn: "新建库",
+      importBtn: "智能提取入库",
+      deleteSelected: "删除选中",
+      noSetsFound: "暂无术语库。请新建或开始分析任务以提取术语。",
+      extractModal: {
+        title: "智能提取配置",
+        source: "来源内容",
+        target: "目标位置",
+        createNew: "新建术语库",
+        appendTo: "追加到当前库",
+        confirm: "开始提取",
+        cancel: "取消",
+        warning: "请先选择一个需要追加的术语库。"
+      },
+      importModal: {
+        title: "智能提取 / 入库",
+        desc: "上传文件或粘贴文本。AI 将自动识别术语、生成解释并结构化。",
+        tabFile: "上传文件",
+        tabText: "粘贴文本",
+        contextLabel: "背景说明 / 提示词 (可选)",
+        contextPlaceholder: "例如：这是关于心脏病学的医学文档，请重点关注药物名称...",
+        previewTitle: "预览与确认",
+        targetSet: "目标位置",
+        newSet: "新建术语库",
+        existingSet: "追加到：",
+        btnAnalyze: "开始 AI 识别",
+        btnSave: "确认入库",
+        filePlaceholder: "拖拽文件或点击上传 (TXT, CSV, PDF, DOCX...)"
+      },
+      columns: {
+        name: "库名称",
+        tags: "分类标签",
+        count: "术语数",
+        updated: "更新时间",
+        actions: "操作"
+      },
+      modal: {
+        createTitle: "新建术语库",
+        editTitle: "编辑术语库",
+        nameLabel: "库名称",
+        tagsLabel: "分类标签 (逗号分隔)",
+        descLabel: "描述备注",
+        cancel: "取消",
+        save: "保存"
+      },
+      detail: {
+        back: "返回库列表",
+        addItem: "添加术语",
+        importCSV: "批量导入",
+        empty: "该库暂无术语。",
+        termHeader: "术语 (原文)",
+        defHeader: "定义 / 备注"
+      },
       driveSync: "同步至 Drive"
     },
+    agents: {
+      title: "智能体中心",
+      subtitle: "管理您的专用 AI 智能体和历史会话记录。",
+      newChat: "新建会话",
+      placeholder: "请选择一个会话开始消息...",
+      searchPlaceholder: "搜索话题关键字...",
+      modelSelect: "模型"
+    },
     srt: {
-      title: "第四步：生成精校 SRT 字幕",
-      desc: "AI 正在重新生成 SRT 文件，保持时间轴精确同步，同时应用修正后的文本。",
-      download: "下载 .SRT 文件",
+      title: "第三步：生成精校字幕",
+      desc: "AI 正在重新生成字幕文件，严格保持原格式和时间轴，同时应用修正后的文本。",
+      download: "下载字幕文件",
       next: "下一步：生成文稿"
     },
     transcript: {
-      title: "第五步：生成最终文稿",
+      title: "第四步：生成最终文稿",
       exportBtn: "导出 Markdown",
       waiting: "等待生成开始...",
       complete: "转写完成",
       startNew: "开始新任务"
     },
     chat: {
-      title: "AI 智能助手",
+      title: "快速助手",
       newChat: "新建",
       history: "历史",
       inputPlaceholder: "有问题尽管问...",
@@ -259,9 +530,13 @@ export const translations = {
       desc: "本地数据存储在浏览器的 IndexedDB 中。清除数据可释放空间。",
       workspace: "当前工作区",
       chats: "聊天历史记录",
+      glossarySets: "术语库集合",
+      manageTab: "去管理",
       clearBtn: "清除数据",
       size: "预估大小",
       count: "数量",
+      unit: "项",
+      unitSets: "个",
       empty: "暂无存储数据"
     },
     errors: {
@@ -282,7 +557,23 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('zh'); 
+  // Initialize state with lazy initializer to check localStorage or Browser preference
+  const [language, setLanguageState] = useState<Language>(() => {
+    // 1. Check persistence
+    const saved = localStorage.getItem('verbaflow_ui_lang');
+    if (saved === 'en' || saved === 'zh') return saved;
+    
+    // 2. Auto-detect browser language
+    const browserLang = navigator.language.toLowerCase();
+    // Prefer Chinese for Chinese users, otherwise default to English
+    return browserLang.startsWith('zh') ? 'zh' : 'en';
+  });
+
+  // Wrapper to save to persistence on change
+  const setLanguage = (lang: Language) => {
+      setLanguageState(lang);
+      localStorage.setItem('verbaflow_ui_lang', lang);
+  };
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t: translations[language] }}>

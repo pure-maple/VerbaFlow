@@ -1,350 +1,382 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Plus, Trash2, Edit2, Sparkles, MessageSquare, Maximize2, Minimize2, Check, PenSquare, Download } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Maximize2, Minimize2, GripHorizontal } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChatSession, ChatMessage } from '../types';
 import { chatWithAgent, generateSessionTitle } from '../services/geminiService';
 import { useConfig } from '../contexts/ConfigContext';
 import { storage } from '../services/storage';
 
-const ChatWidget: React.FC = () => {
+interface Props {
+  externalPrompt?: string | null;
+  onClearExternalPrompt?: () => void;
+}
+
+const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) => {
   const { t } = useLanguage();
   const { geminiApiKey, geminiBaseUrl } = useConfig();
+  
+  // UI State
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  
+  // Chat State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null); // Track Active Session ID
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gemini-3-flash-preview");
   
-  // Renaming State
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load from IndexedDB
+  // --- POSITIONING LOGIC ---
+  const [offset, setOffset] = useState({ right: 40, bottom: 40 });
+  const dragRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const startOffsetRef = useRef({ right: 0, bottom: 0 });
+  const isDocked = offset.right < 20;
+
+  // Load latest session on mount if none active
   useEffect(() => {
-    const loadChats = async () => {
-        try {
-            const loaded = await storage.loadChats();
-            if (Array.isArray(loaded) && loaded.length > 0) {
-                setSessions(loaded);
-            }
-        } catch (e) {
-            console.error("Failed to load chat history", e);
-        }
-    };
-    loadChats();
+      if (!sessionId) {
+          storage.loadChats().then(chats => {
+              if (chats.length > 0) {
+                  // Load the most recent one
+                  const latest = chats[0];
+                  setSessionId(latest.id);
+                  setMessages(latest.messages);
+              }
+          });
+      }
   }, []);
 
-  // Save to IndexedDB
+  // Handle External Prompt (Appending Logic)
   useEffect(() => {
-    // Debounce save to avoid performance hits
-    const timer = setTimeout(() => {
-        if (sessions.length > 0) {
-            storage.saveChats(sessions);
-        }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [sessions]);
+      if (externalPrompt) {
+          if (!isOpen) setIsOpen(true);
+          
+          // Auto-send if we have a prompt
+          // We use a timeout to allow state to settle if needed, but direct call is better
+          handleExternalSend(externalPrompt);
+          
+          if (onClearExternalPrompt) onClearExternalPrompt();
+      }
+  }, [externalPrompt]);
 
+  // Save Session on Update
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [sessions, currentSessionId, isTyping]);
+      if (sessionId && messages.length > 0) {
+          const timer = setTimeout(() => {
+              // We need to fetch the existing session to preserve title/model if we only have messages here
+              // Ideally we'd store the full session object in state, but let's do a partial update or upsert
+              storage.loadChats().then(chats => {
+                  const existing = chats.find(c => c.id === sessionId);
+                  const sessionToSave: ChatSession = existing ? {
+                      ...existing,
+                      messages: messages,
+                      createdAt: Date.now() // Update timestamp to bump to top
+                  } : {
+                      id: sessionId,
+                      title: messages[0]?.content.slice(0, 30) || "New Chat",
+                      messages: messages,
+                      model: selectedModel,
+                      createdAt: Date.now()
+                  };
+                  storage.saveChatSession(sessionToSave);
+              });
+          }, 1000);
+          return () => clearTimeout(timer);
+      }
+  }, [messages, sessionId]);
 
-  const createSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: t.chat.newChat,
-      messages: [],
-      model: selectedModel,
-      createdAt: Date.now()
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
-  };
-
-  const deleteSession = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setSessions(prev => prev.filter(s => s.id !== id));
-    if (currentSessionId === id) setCurrentSessionId(null);
-  };
-
-  const startEditing = (e: React.MouseEvent, session: ChatSession) => {
-    e.stopPropagation();
-    setEditingSessionId(session.id);
-    setEditTitle(session.title);
-  };
-
-  const saveTitle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (editingSessionId) {
-      setSessions(prev => prev.map(s => s.id === editingSessionId ? { ...s, title: editTitle } : s));
-      setEditingSessionId(null);
+  // Scroll to bottom
+  useEffect(() => {
+    if (isOpen && !isMinimized) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [messages, isTyping, isOpen, isMinimized]);
+
+  // ... (Keep existing positioning/dragging logic exactly as is) ...
+  useEffect(() => {
+      if (!isOpen) return;
+      const checkBounds = () => {
+          const winH = window.innerHeight;
+          const winW = window.innerWidth;
+          const cssMaxHeight = winH * 0.85;
+          const targetHeight = isMinimized ? 48 : Math.min(600, cssMaxHeight);
+          const targetWidth = isMinimized ? 300 : 400;
+          const safeMargin = 20;
+
+          setOffset(prev => {
+              let { right, bottom } = prev;
+              let changed = false;
+              const maxBottom = winH - targetHeight - safeMargin;
+              if (bottom > maxBottom) { bottom = Math.max(safeMargin, maxBottom); changed = true; }
+              const maxRight = winW - targetWidth - safeMargin;
+              if (right > maxRight) { right = Math.max(safeMargin, maxRight); changed = true; }
+              if (bottom < safeMargin) { bottom = safeMargin; changed = true; }
+              if (!isDocked && right < safeMargin) { right = safeMargin; changed = true; }
+              return changed ? { right, bottom } : prev;
+          });
+      };
+      checkBounds();
+      window.addEventListener('resize', checkBounds);
+      return () => window.removeEventListener('resize', checkBounds);
+  }, [isOpen, isMinimized, isDocked]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+      e.preventDefault(); e.stopPropagation();
+      isDraggingRef.current = false;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      startOffsetRef.current = { ...offset };
+      const moveHandler = (moveEvent: MouseEvent) => {
+          const deltaX = moveEvent.clientX - dragStartRef.current.x;
+          const deltaY = moveEvent.clientY - dragStartRef.current.y;
+          if (!isDraggingRef.current && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) isDraggingRef.current = true;
+          if (isDraggingRef.current) setOffset({ right: startOffsetRef.current.right - deltaX, bottom: startOffsetRef.current.bottom - deltaY });
+      };
+      const upHandler = () => {
+          document.removeEventListener('mousemove', moveHandler);
+          document.removeEventListener('mouseup', upHandler);
+          if (isDraggingRef.current) setOffset(prev => (prev.right < 20 && prev.right > -30) ? { ...prev, right: 0 } : prev);
+      };
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('mouseup', upHandler);
   };
 
-  const handleExportSession = (e: React.MouseEvent, session: ChatSession) => {
-    e.stopPropagation();
-    const markdown = session.messages.map(m => `**${m.role === 'user' ? 'User' : 'VerbaFlow AI'} (${new Date(m.timestamp).toLocaleTimeString()}):**\n\n${m.content}\n\n---\n`).join('\n');
-    
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat_export_${session.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleToggle = () => {
+      if (!isDraggingRef.current) {
+          if (!isOpen && isDocked) setOffset(prev => ({ ...prev, right: 40 }));
+          setIsOpen(!isOpen);
+      }
   };
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
+  const handleExternalSend = async (text: string) => {
+      if (!geminiApiKey) { alert("Please configure API Key."); return; }
+      
+      // If no session exists, start one
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+          currentSessionId = Date.now().toString();
+          setSessionId(currentSessionId);
+          setMessages([]);
+      }
+
+      await processMessage(text, currentSessionId);
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
-    if (!geminiApiKey) {
-        alert("Please configure API Key in settings first.");
-        return;
+    if (!geminiApiKey) { alert("Please configure API Key."); return; }
+
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+        currentSessionId = Date.now().toString();
+        setSessionId(currentSessionId);
     }
 
-    if (!currentSessionId) {
-      createSession();
-      setTimeout(() => handleSendLogic(input), 10); 
-    } else {
-      handleSendLogic(input);
-    }
+    await processMessage(input, currentSessionId);
+    setInput("");
   };
 
-  const handleSendLogic = async (text: string) => {
-    const sessionId = currentSessionId || sessions[0].id;
+  const processMessage = async (content: string, currentSessId: string) => {
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: text,
+      content: content,
       timestamp: Date.now()
     };
 
-    setInput("");
-    
-    setSessions(prev => prev.map(s => 
-      s.id === sessionId ? { ...s, messages: [...s.messages, userMsg] } : s
-    ));
-    
+    setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
 
     try {
       let fullResponse = "";
-      const history = sessions.find(s => s.id === sessionId)?.messages.map(m => ({
+      // Construct history from current messages
+      const history = messages.map(m => ({
         role: m.role,
         parts: [{ text: m.content }]
-      })) || [];
+      }));
 
-      await chatWithAgent(history, text, selectedModel, geminiApiKey, geminiBaseUrl, (chunk) => {
+      await chatWithAgent(history, userMsg.content, selectedModel, geminiApiKey, geminiBaseUrl, (chunk) => {
         fullResponse += chunk;
-        setSessions(prev => prev.map(s => {
-          if (s.id !== sessionId) return s;
-          const msgs = [...s.messages];
+        setMessages(prev => {
+          const msgs = [...prev];
           const last = msgs[msgs.length - 1];
-          if (last.role === 'model' && last.id === `stream-${sessionId}`) {
+          if (last.role === 'model' && last.id === `stream-${currentSessId}`) {
             last.content = fullResponse;
-            return { ...s, messages: msgs };
+            return [...msgs];
           } else {
-            return { 
-              ...s, 
-              messages: [...msgs, { id: `stream-${sessionId}`, role: 'model', content: fullResponse, timestamp: Date.now() }] 
-            };
+            return [...msgs, { id: `stream-${currentSessId}`, role: 'model', content: fullResponse, timestamp: Date.now() }];
           }
-        }));
+        });
       });
-
-      const session = sessions.find(s => s.id === sessionId);
-      if (session && session.messages.length <= 1) {
-         const newTitle = await generateSessionTitle(text, geminiApiKey, geminiBaseUrl);
-         setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));
+      
+      // Rename if it's the first message
+      if (messages.length === 0) {
+           generateSessionTitle(content, geminiApiKey, geminiBaseUrl).then(title => {
+               storage.loadChats().then(chats => {
+                   const s = chats.find(c => c.id === currentSessId);
+                   if (s) storage.saveChatSession({ ...s, title });
+               });
+           });
       }
 
     } catch (e) {
       console.error(e);
-      // add error message to chat
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleMagicRename = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const s = sessions.find(sess => sess.id === id);
-    if (!s || s.messages.length === 0) return;
-    if (!geminiApiKey) return;
-    
-    const newTitle = await generateSessionTitle(s.messages[0].content, geminiApiKey, geminiBaseUrl);
-    setSessions(prev => prev.map(sess => sess.id === id ? { ...sess, title: newTitle } : sess));
+  const handleNewChat = () => {
+      setSessionId(Date.now().toString());
+      setMessages([]);
+      setInput("");
   };
 
   if (!isOpen) {
     return (
-      <button 
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-all z-50 animate-bounce hover:animate-none"
+      <div 
+        ref={dragRef}
+        style={{ 
+            bottom: `${offset.bottom}px`, 
+            right: `${isDocked ? -20 : offset.right}px`,
+            transition: isDraggingRef.current ? 'none' : 'right 0.3s ease, transform 0.2s',
+            touchAction: 'none'
+        }}
+        className={`fixed z-[60] group`}
+        onMouseDown={handleMouseDown}
+        onClick={handleToggle}
       >
-        <MessageCircle size={28} />
-      </button>
+        <div className={`
+            w-14 h-14 bg-slate-900 text-white dark:bg-indigo-600 shadow-2xl flex items-center justify-center cursor-move border border-slate-700
+            ${isDocked ? 'rounded-l-xl rounded-r-none pl-2' : 'rounded-full hover:scale-105 active:scale-95'}
+            transition-all duration-300
+        `}>
+             {isDocked ? (
+                 <div className="flex items-center">
+                     <MessageCircle size={24} className="animate-pulse" />
+                     <div className="absolute right-full top-0 h-full bg-slate-900 dark:bg-indigo-600 text-white text-xs font-bold px-3 flex items-center rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap -mr-1">
+                         Chat
+                     </div>
+                 </div>
+             ) : (
+                 <MessageCircle size={26} />
+             )}
+        </div>
+      </div>
     );
   }
 
+  const panelWidth = isMinimized ? 300 : 400;
+  const panelHeight = isMinimized ? 48 : 600;
+  
   return (
-    <div className={`fixed z-50 bg-white dark:bg-slate-800 shadow-2xl rounded-t-xl md:rounded-xl overflow-hidden transition-all duration-300 flex flex-col font-sans border border-slate-200 dark:border-slate-700 ${
-      isMinimized ? 'bottom-0 right-6 w-72 h-12' : 'bottom-0 right-0 md:right-6 w-full md:w-[480px] h-[85vh] md:bottom-6'
-    }`}>
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-3 flex justify-between items-center cursor-pointer select-none" onClick={() => setIsMinimized(!isMinimized)}>
-        <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
-          <div className="p-1 bg-indigo-100 dark:bg-indigo-900/40 rounded-md">
-            <Sparkles size={16} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
+    <div 
+        className={`fixed z-[60] bg-white dark:bg-slate-800 shadow-2xl rounded-xl overflow-hidden flex flex-col font-sans border border-slate-200 dark:border-slate-700 transition-all duration-200`}
+        style={{
+            width: `${panelWidth}px`,
+            height: `${panelHeight}px`,
+            bottom: `${offset.bottom}px`,
+            right: `${offset.right}px`,
+            maxHeight: '85vh',
+            transition: isDraggingRef.current ? 'none' : 'width 0.2s, height 0.2s'
+        }}
+    >
+      <div 
+        className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 p-3 flex justify-between items-center cursor-move select-none active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100 pointer-events-none">
+          <Sparkles size={16} className="text-indigo-600 dark:text-indigo-400" />
           <span className="font-bold text-sm">{t.chat.title}</span>
         </div>
+        <div className="flex-1 flex justify-center text-slate-300 dark:text-slate-600 pointer-events-none">
+             <GripHorizontal size={16} />
+        </div>
         <div className="flex items-center gap-1 text-slate-400">
-           {isMinimized ? <Maximize2 size={16} className="hover:text-slate-600 dark:hover:text-slate-200"/> : <Minimize2 size={16} className="hover:text-slate-600 dark:hover:text-slate-200"/>}
-           <button onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} className="hover:text-red-500 p-1"><X size={18}/></button>
+           {!isMinimized && (
+               <button 
+                 onMouseDown={(e) => e.stopPropagation()} 
+                 onClick={handleNewChat} 
+                 className="p-1 mr-1 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                 title="New Chat"
+               >
+                   <MessageCircle size={16}/>
+               </button>
+           )}
+           <button 
+             onMouseDown={(e) => e.stopPropagation()} 
+             onClick={() => setIsMinimized(!isMinimized)} 
+             className="p-1 hover:text-slate-600 dark:hover:text-slate-200 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+           >
+               {isMinimized ? <Maximize2 size={16}/> : <Minimize2 size={16}/>}
+           </button>
+           <button 
+             onMouseDown={(e) => e.stopPropagation()} 
+             onClick={() => setIsOpen(false)} 
+             className="p-1 hover:text-red-500 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+           >
+             <X size={18}/>
+           </button>
         </div>
       </div>
 
       {!isMinimized && (
-        <div className="flex flex-1 h-full overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-40 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-             <div className="p-3 border-b border-slate-200 dark:border-slate-700">
-               <button 
-                 onClick={createSession} 
-                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
-               >
-                 <Plus size={14} /> {t.chat.newChat}
-               </button>
-             </div>
-             
-             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-               {sessions.map(s => (
-                 <div 
-                  key={s.id}
-                  onClick={() => setCurrentSessionId(s.id)}
-                  className={`group relative p-2 rounded-lg cursor-pointer text-xs transition-colors ${
-                    currentSessionId === s.id 
-                    ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm text-slate-800 dark:text-slate-100 font-medium' 
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200'
-                  }`}
-                 >
-                   {editingSessionId === s.id ? (
-                     <div className="flex items-center gap-1">
-                       <input 
-                         className="w-full p-1 border border-indigo-300 dark:border-indigo-700 rounded focus:outline-none bg-white dark:bg-slate-900"
-                         value={editTitle}
-                         onClick={(e) => e.stopPropagation()}
-                         onChange={(e) => setEditTitle(e.target.value)}
-                         autoFocus
-                       />
-                       <button onClick={saveTitle} className="text-green-600"><Check size={14} /></button>
-                     </div>
-                   ) : (
-                     <div className="flex items-center gap-2">
-                       <MessageSquare size={14} className="flex-shrink-0 opacity-70" />
-                       <span className="truncate flex-1">{s.title}</span>
-                     </div>
-                   )}
-                   
-                   {/* Hover Actions */}
-                   {editingSessionId !== s.id && (
-                     <div className="absolute right-1 top-1.5 hidden group-hover:flex bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-md shadow-sm border border-slate-200 dark:border-slate-600 p-0.5">
-                        <button onClick={(e) => handleMagicRename(e, s.id)} className="p-1 hover:text-indigo-600 text-slate-400" title="AI Rename"><Sparkles size={12}/></button>
-                        <button onClick={(e) => startEditing(e, s)} className="p-1 hover:text-blue-600 text-slate-400" title="Manual Rename"><PenSquare size={12}/></button>
-                        <button onClick={(e) => handleExportSession(e, s)} className="p-1 hover:text-green-600 text-slate-400" title={t.chat.export}><Download size={12}/></button>
-                        <button onClick={(e) => deleteSession(e, s.id)} className="p-1 hover:text-red-600 text-slate-400" title="Delete"><Trash2 size={12}/></button>
-                     </div>
-                   )}
-                 </div>
-               ))}
-             </div>
-          </div>
-
-          {/* Chat Area */}
-          <div className="flex-1 flex flex-col bg-slate-50/50 dark:bg-slate-900/50">
-            {currentSession ? (
-              <>
-                <div className="flex-1 overflow-y-auto p-4 space-y-5">
-                  {currentSession.messages.map((m, idx) => (
-                    <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                        m.role === 'user' 
-                          ? 'bg-indigo-600 text-white rounded-br-none' 
-                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-none'
-                      }`}>
-                         <div className="whitespace-pre-wrap">{m.content}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {isTyping && (
-                    <div className="flex justify-start">
-                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl rounded-bl-none text-xs text-slate-400 flex items-center gap-2">
-                         <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
-                         <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></div>
-                         <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></div>
-                       </div>
-                    </div>
-                  )}
-                  <div ref={bottomRef} />
-                </div>
-                
-                {/* Input Area */}
-                <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                  <div className="flex justify-between items-center mb-2 px-1">
-                    <select 
-                      value={selectedModel} 
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 dark:bg-slate-700 border-none text-slate-500 dark:text-slate-300 rounded px-2 py-1 focus:ring-0 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600"
-                    >
-                      <option value="gemini-3-flash-preview">Flash 3.0</option>
-                      <option value="gemini-3-pro-preview">Pro 3.0</option>
-                    </select>
+        <div className="flex flex-col flex-1 h-full overflow-hidden bg-slate-50/30 dark:bg-slate-900/30">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && (
+                  <div className="text-center text-slate-400 mt-10 text-xs">
+                      <p>{t.chat.welcomeSubtitle}</p>
                   </div>
-                  <div className="relative">
-                    <textarea 
-                      className="w-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-indigo-500 transition-all resize-none text-slate-900 dark:text-slate-100"
-                      placeholder={t.chat.inputPlaceholder}
-                      value={input}
-                      rows={1}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSend();
-                        }
-                      }}
-                    />
-                    <button 
-                      onClick={handleSend}
-                      disabled={!input.trim() || isTyping}
-                      className="absolute right-2 bottom-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-colors"
-                    >
-                      <Send size={16} />
-                    </button>
+              )}
+              {messages.map((m, idx) => (
+                <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
+                    m.role === 'user' 
+                      ? 'bg-indigo-600 text-white rounded-br-none' 
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'
+                  }`}>
+                     <div className="whitespace-pre-wrap">{m.content}</div>
                   </div>
                 </div>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-white dark:bg-slate-800">
-                <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mb-4">
-                  <Sparkles size={32} className="text-indigo-400" />
+              ))}
+              {isTyping && (
+                <div className="flex justify-start">
+                   <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl rounded-bl-none text-xs text-slate-400 flex items-center gap-2">
+                     <span className="animate-pulse">Thinking...</span>
+                   </div>
                 </div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{t.chat.welcomeTitle}</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-[200px]">{t.chat.welcomeSubtitle}</p>
-                <button onClick={createSession} className="mt-6 px-4 py-2 bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors">
-                  {t.chat.startBtn}
+              )}
+              <div ref={bottomRef} />
+            </div>
+            
+            <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div className="relative">
+                <textarea 
+                  className="w-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-indigo-500 transition-all resize-none text-slate-900 dark:text-slate-100"
+                  placeholder={t.chat.inputPlaceholder}
+                  value={input}
+                  rows={2}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+                <button 
+                  onClick={handleSend}
+                  disabled={!input.trim() || isTyping}
+                  className="absolute right-2 bottom-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  <Send size={16} />
                 </button>
               </div>
-            )}
-          </div>
+            </div>
         </div>
       )}
     </div>

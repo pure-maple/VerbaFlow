@@ -1,9 +1,10 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { Download, CheckCircle, RefreshCw, FileText, Subtitles, HardDrive, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AppStep } from '../types';
-import { saveToDrive } from '../services/googleDriveService';
+// import { saveToDrive } from '../services/googleDriveService'; // Drive Disabled
 
 interface Props {
   content: string;
@@ -40,6 +41,7 @@ const FinalTranscript: React.FC<Props> = ({ content, isGenerating, onRestart, cu
   };
   
   const handleDriveSave = async () => {
+    /*
     setIsSaving(true);
     try {
       const isSRT = currentStep === AppStep.GENERATION_SRT;
@@ -55,6 +57,8 @@ const FinalTranscript: React.FC<Props> = ({ content, isGenerating, onRestart, cu
     } finally {
       setIsSaving(false);
     }
+    */
+    alert("Drive Save is temporarily disabled.");
   };
 
   const title = currentStep === AppStep.GENERATION_SRT ? t.srt.title : t.transcript.title;
@@ -78,6 +82,7 @@ const FinalTranscript: React.FC<Props> = ({ content, isGenerating, onRestart, cu
           </div>
           
           <div className="flex gap-2">
+             {/* Drive Button Removed
              <button
               onClick={handleDriveSave}
               disabled={!content || isGenerating || isSaving}
@@ -90,6 +95,7 @@ const FinalTranscript: React.FC<Props> = ({ content, isGenerating, onRestart, cu
               {isSaving ? <Loader2 size={16} className="animate-spin"/> : <HardDrive size={16} />}
               <span className="hidden sm:inline">Drive</span>
             </button>
+            */}
             <button
               onClick={handleDownload}
               disabled={!content || isGenerating}

@@ -1,20 +1,40 @@
+
 export enum AppStep {
   UPLOAD = 1,
-  ANALYSIS = 2,
-  CONFIRMATION = 3,
-  GENERATION_SRT = 4,
-  GENERATION_MD = 5,
+  CONFIRMATION = 2, // Analysis loading state happens inside this view initially
+  GENERATION_SRT = 3,
+  GENERATION_MD = 4,
 }
 
 export enum ViewMode {
   STUDIO = 'studio',
-  GLOSSARY = 'glossary'
+  GLOSSARY = 'glossary',
+  AGENTS = 'agents'
+}
+
+export type FileSource = 'local' | 'drive';
+
+export interface AnalyzeSelection {
+  video: boolean;
+  audio: boolean;
+  srt: boolean;
 }
 
 export interface UploadedFiles {
   audio: File | null;
+  audioSource: FileSource;
+  audioDriveId?: string;
+  
+  video: File | null;
+  videoSource: FileSource;
+  videoDriveId?: string;
+
   srt: File | null;
+  srtSource: FileSource;
+  srtDriveId?: string;
+  
   srtContent: string;
+  subtitleFormat?: string; // srt, vtt, ass, etc.
 }
 
 export interface SubtitleItem {
@@ -30,9 +50,10 @@ export interface VocabItem {
   original: string;
   corrected: string;
   type: string;
-  status: 'corrected' | 'needs_confirmation' | 'check_spelling' | 'custom';
+  status: 'corrected' | 'needs_confirmation' | 'check_spelling' | 'custom' | 'ai_recheck';
   customStatus?: string; // For user defined status
-  remarks?: string;      // For extra notes
+  userNote?: string;      // User's instructions/notes (editable)
+  aiReason?: string;      // AI's original reason (read-only reference)
 }
 
 export interface AnalysisResult {
@@ -48,9 +69,18 @@ export interface AnalysisResult {
 export interface GlossaryItem {
   id: string;
   term: string;
-  definition: string; // Contextual definition
-  context?: string;   // Example usage or strict rule
-  selected?: boolean; // For UI selection
+  definition: string; // Description
+  remarks?: string;   // Extra notes
+}
+
+export interface GlossarySet {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[]; // For categorization (e.g., "Medical", "Gaming", "Legal")
+  items: GlossaryItem[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ChatMessage {
