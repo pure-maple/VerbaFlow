@@ -14,7 +14,7 @@ interface Props {
 
 const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) => {
   const { t } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl } = useConfig();
+  const { llmApiKey, llmBaseUrl } = useConfig();
   
   // UI State
   const [isOpen, setIsOpen] = useState(false);
@@ -153,7 +153,7 @@ const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) 
   };
 
   const handleExternalSend = async (text: string) => {
-      if (!geminiApiKey) { alert("Please configure API Key."); return; }
+      if (!llmApiKey) { alert("Please configure API Key."); return; }
       
       // If no session exists, start one
       let currentSessionId = sessionId;
@@ -168,7 +168,7 @@ const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) 
 
   const handleSend = async () => {
     if (!input.trim()) return;
-    if (!geminiApiKey) { alert("Please configure API Key."); return; }
+    if (!llmApiKey) { alert("Please configure API Key."); return; }
 
     let currentSessionId = sessionId;
     if (!currentSessionId) {
@@ -199,7 +199,7 @@ const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) 
         parts: [{ text: m.content }]
       }));
 
-      await chatWithAgent(history, userMsg.content, selectedModel, geminiApiKey, geminiBaseUrl, (chunk) => {
+      await chatWithAgent(history, userMsg.content, selectedModel, llmApiKey, llmBaseUrl, (chunk) => {
         fullResponse += chunk;
         setMessages(prev => {
           const msgs = [...prev];
@@ -215,7 +215,7 @@ const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPrompt }) 
       
       // Rename if it's the first message
       if (messages.length === 0) {
-           generateSessionTitle(content, geminiApiKey, geminiBaseUrl).then(title => {
+           generateSessionTitle(content, llmApiKey, llmBaseUrl).then(title => {
                storage.loadChats().then(chats => {
                    const s = chats.find(c => c.id === currentSessId);
                    if (s) storage.saveChatSession({ ...s, title });

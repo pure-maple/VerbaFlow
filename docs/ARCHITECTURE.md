@@ -1,126 +1,105 @@
 
-# VerbaFlow Architecture & Design Guide
+# VerbaFlow Architecture Guide
 
-> [中文说明](#verbaflow-架构与设计指南)
+> **[中文说明](#verbaflow-架构设计指南)**
 
-## System Overview
+VerbaFlow is designed as a **Client-Side SPA (Single Page Application)**. It prioritizes privacy, low latency, and offline capability.
 
-VerbaFlow is a client-side React application that leverages the Google Gemini API for intelligent text processing. It focuses on privacy and data ownership by storing business logic data in IndexedDB and configuration in LocalStorage.
+## 1. System High-Level Overview
 
-### Core Technologies
-*   **State Management**: React Context (`ConfigContext`, `LanguageContext`) for global settings; Component state for UI flow.
-*   **Storage**: `services/storage.ts` wraps `IndexedDB` for robust offline storage of large objects (transcripts, chat history, glossaries).
-*   **AI Integration**: `services/geminiService.ts` acts as the interface layer for Google GenAI SDK.
+```mermaid
+graph TD
+    User[User] --> UI[React UI Components]
+    UI --> Context[Config & Language Context]
+    UI --> Service[Gemini Service / LLM Adapter]
+    UI --> Storage[Storage Service (Dexie.js)]
+    
+    Service --> Google[Google Gemini API]
+    Service --> OpenAI[OpenAI API]
+    Service --> Anthropic[Anthropic API]
+    
+    Storage --> IDB[(Browser IndexedDB)]
+    Storage --> LS[(LocalStorage)]
+```
 
----
+## 2. Core Service Layer: LLM Adapters
 
-## Agent & Chat Architecture
+The most critical part of the application is `services/geminiService.ts`. Despite the legacy name, it has been refactored into a **Universal Chat Adapter**.
 
-Currently, VerbaFlow uses a **Session-Based Agent** model. This is designed to support future expansion into a Multi-Agent system.
+### The `UniversalChatSession` Class
+This class abstracts the differences between provider protocols.
 
-### Current Implementation
-The `ChatWidget` component manages a list of `ChatSession` objects.
-*   **Isolation**: Each chat session is an independent context window. The AI does not "remember" what was said in Session A when you are in Session B.
-*   **Context Injection**: When a user clicks "Ask Agent" in the analysis view, the app creates a *new* session (or appends to active) and programmatically injects the specific subtitle/term context as the prompt.
+*   **Input**: It accepts a standardized prompt string and an optional `isJsonMode` flag.
+*   **Output**: It returns a standardized Promise<string> (usually JSON stringified).
+*   **Internal Logic**:
+    *   **Gemini**: Instantiates `GoogleGenAI` SDK. Uses `chats.sendMessage`.
+    *   **OpenAI**: Uses native `fetch` to POST to `/v1/chat/completions`. Handles `response_format: { type: "json_object" }`.
+    *   **Anthropic**: Uses native `fetch` to POST to `/v1/messages`. Manages system prompts via top-level parameters (not message history).
 
-### Multi-Agent Strategy (Future Roadmap)
-To support specialized roles (e.g., "Translator", "Grammar Nazi", "Term Manager"), we recommend the following pattern without needing a complex backend:
+### Streaming Strategy
+For long-form content generation (Subtitle Rewrite / Markdown generation), we use independent functions (`generatePolishedSubtitle`, `generateFinalTranscript`) that implement provider-specific streaming logic:
+*   **Gemini**: `generateContentStream` (Async Iterator).
+*   **OpenAI/Anthropic**: `fetch` with `ReadableStream` decoding (Server-Sent Events parsing).
 
-1.  **Session Tagging**: Add a `type` or `persona` field to the `ChatSession` interface.
-    ```typescript
-    interface ChatSession {
-      id: string;
-      type: 'general' | 'translator' | 'reviewer'; // Discriminator
-      ...
-    }
-    ```
-2.  **System Instruction Injection**: When creating a new session, inject a specific `systemInstruction` based on the persona.
-    *   *Translator Persona*: "You are a specialized translator. Focus on nuance and tone..."
-    *   *Reviewer Persona*: "You are a strict proofreader. Only point out objective errors..."
-3.  **UI Separation**: In the `ChatWidget` sidebar, group sessions by their `type` or Persona.
+## 3. Data Persistence (Dexie.js)
 
----
+We use `Dexie.js` to manage **IndexedDB**, which allows storing large blobs (video/audio files) and complex objects (project state) that `LocalStorage` cannot handle.
 
-## Glossary Logic
+### Database Schema (`services/storage.ts`)
+1.  **`projects`**: Lightweight metadata for the dashboard list.
+2.  **`workspace`**: Heavy JSON state (current step, analysis results, vocab list).
+3.  **`files`**: Binary Blobs (Audio, Video). *Note: We store these to persist state across reloads, but browsers may evict them if disk space is low.*
+4.  **`glossarySets`**: Global terminology sets.
+5.  **`chats`**: Agent conversation history.
 
-### Smart Extraction Flow
-1.  **Trigger**: User clicks "Smart Extraction" in Glossary Manager.
-2.  **Input**: The raw SRT content + current Vocabulary Analysis results.
-3.  **AI Process**: Gemini analyzes the content to extract proper nouns and technical terms, providing context-specific definitions.
-4.  **Confirmation (Modal)**: The user chooses to:
-    *   **Create New**: Saves as a timestamped new Glossary Set.
-    *   **Append**: Merges new terms into an existing set (deduplicating by term name).
+## 4. State Management
 
-### Terminology Consistency
-During the `ANALYSIS` phase (Step 2), the system feeds *all* items from *all* Glossary Sets into the prompt context. This ensures the AI respects your established terminology library across different files.
-
----
-
-## Data Privacy & Storage
-
-*   **API Keys**: Stored in `LocalStorage`. They are never sent to any server other than Google's API endpoints.
-*   **Business Data**: Transcripts, edits, and glossaries are stored in `IndexedDB`.
-*   **Cloud Sync**: Google Drive integration is purely client-side via the Drive API. VerbaFlow does not have a backend server that sees your data.
+*   **Global Config**: `ConfigContext` stores API Keys and Provider selection. Persisted in `LocalStorage`.
+*   **UI State**: `LanguageContext` handles i18n.
+*   **Project State**: Loaded from IndexedDB into React Component State (`App.tsx`) when a project is opened. Autosaved back to IndexedDB via a debounced `useEffect`.
 
 ---
 
-# VerbaFlow 架构与设计指南
+# VerbaFlow 架构设计指南
 
-## 系统概览
+VerbaFlow 被设计为一个 **客户端 SPA (单页应用)**。它的核心设计理念是隐私优先、低延迟和离线可用性。
 
-VerbaFlow 是一个纯前端的 React 应用，利用 Google Gemini API 进行智能文本处理。应用强调隐私和数据所有权，将业务逻辑数据存储在 IndexedDB 中，配置信息存储在 LocalStorage 中。
+## 1. 系统宏观概览
 
-### 核心技术
-*   **状态管理**: React Context (`ConfigContext`, `LanguageContext`) 用于全局设置；组件级 State 用于 UI 流程。
-*   **存储层**: `services/storage.ts` 封装了 `IndexedDB`，用于稳健地离线存储大对象（文稿、聊天记录、术语库）。
-*   **AI 集成**: `services/geminiService.ts` 作为 Google GenAI SDK 的接口层。
+应用没有后端业务服务器。所有的业务逻辑都在浏览器中执行，所有的数据都存储在用户的设备上。
 
----
+## 2. 核心服务层：LLM 适配器模式
 
-## Agent 与聊天架构
+`services/geminiService.ts` 是系统的核心。尽管文件名保留了 Gemini，但内部已经重构为 **通用聊天适配器 (Universal Chat Adapter)**。
 
-目前，VerbaFlow 采用**基于会话 (Session-Based)** 的 Agent 模型。这一设计旨在为未来扩展到多 Agent 系统打下基础。
+### `UniversalChatSession` 类
+该类屏蔽了不同大模型服务商的协议差异。
 
-### 当前实现
-`ChatWidget` 组件管理着一个 `ChatSession` 对象列表。
-*   **隔离性**: 每个聊天会话都是独立的上下文窗口。AI 不会“记得”你在会话 A 中说过的话（当你处于会话 B 时）。
-*   **上下文注入**: 当用户在分析视图点击“询问 Agent”时，应用会创建一个*新*会话（或追加到当前会话），并以编程方式将特定的字幕/术语上下文注入到提示词中。
+*   **输入**: 接收标准化的提示词字符串 (Prompt) 和 `isJsonMode`（是否强制 JSON 模式）标志。
+*   **输出**: 返回标准化的 Promise<string> (通常是 JSON 字符串)。
+*   **内部逻辑**:
+    *   **Gemini**: 使用官方 `@google/genai` SDK。
+    *   **OpenAI**: 使用原生 `fetch` 请求 `/v1/chat/completions`。通过 `messages` 数组传递 System Prompt。
+    *   **Anthropic**: 使用原生 `fetch` 请求 `/v1/messages`。System Prompt 作为顶层参数传递，而非消息历史的一部分。
 
-### 多 Agent 策略 (未来路线图)
-为了支持特定角色（如“翻译专家”、“语法检查员”、“术语管理员”），我们建议在无需复杂后端的情况下采用以下模式：
+### 流式响应 (Streaming)
+对于长文本生成（如字幕重写、文稿生成），我们使用了独立的函数来处理流式响应：
+*   **Gemini**: 使用 SDK 的 `generateContentStream` 异步迭代器。
+*   **OpenAI/Anthropic**: 使用 `fetch` 的 `ReadableStream` 并手动解析 SSE (Server-Sent Events) 数据包。
 
-1.  **会话标记**: 在 `ChatSession` 接口中增加 `type` 或 `persona` 字段。
-    ```typescript
-    interface ChatSession {
-      id: string;
-      type: 'general' | 'translator' | 'reviewer'; // 区分器
-      ...
-    }
-    ```
-2.  **系统指令注入**: 创建新会话时，根据角色注入特定的 `systemInstruction`。
-    *   *翻译角色*: "你是一位专业的翻译家。专注于细微差别和语气..."
-    *   *复核角色*: "你是一位严格的校对员。只指出客观错误..."
-3.  **UI 分组**: 在 `ChatWidget` 侧边栏中，根据 `type` 或角色对会话进行分组显示。
+## 3. 数据持久化 (Dexie.js)
 
----
+我们使用 `Dexie.js` 封装 **IndexedDB**，这使得我们能够存储 `LocalStorage` 无法处理的大型文件（视频/音频 Blob）和复杂对象（项目状态）。
 
-## 术语库逻辑
+### 数据库设计 (`services/storage.ts`)
+1.  **`projects`**: 轻量级元数据，用于在首页列表快速加载。
+2.  **`workspace`**: 沉重的 JSON 状态（当前步骤、分析结果、词汇表）。
+3.  **`files`**: 二进制 Blob 数据（音频、视频文件）。
+4.  **`glossarySets`**: 全局通用的术语库集合。
+5.  **`chats`**: AI Agent 的对话历史记录。
 
-### 智能提取流程
-1.  **触发**: 用户在术语管理界面点击“智能提取”。
-2.  **输入**: 原始 SRT 内容 + 当前的词汇分析结果。
-3.  **AI 处理**: Gemini 分析内容，提取专有名词和技术术语，并提供基于上下文的定义。
-4.  **确认 (模态框)**: 用户选择：
-    *   **新建库**: 保存为带时间戳的新术语库。
-    *   **追加**: 将新术语合并到现有的库中（按术语名称去重）。
+## 4. 状态管理策略
 
-### 术语一致性
-在 `ANALYSIS`（分析）阶段（第2步），系统会将*所有*术语库中的*所有*条目注入到 Prompt 上下文中。这确保了 AI 在处理不同文件时能够遵守您已建立的术语标准。
-
----
-
-## 数据隐私与存储
-
-*   **API Keys**: 存储在 `LocalStorage` 中。除了 Google 的 API 端点外，它们不会被发送到任何服务器。
-*   **业务数据**: 文稿、修改记录和术语库存储在 `IndexedDB` 中。
-*   **云同步**: Google Drive 集成纯粹通过客户端 Drive API 实现。VerbaFlow 没有后端服务器来查看您的数据。
+*   **全局配置**: `ConfigContext` 存储 API Key 和服务商选择。这些敏感数据仅保存在 `LocalStorage` 中。
+*   **UI 状态**: `LanguageContext` 处理国际化。
+*   **项目状态**: 当打开项目时，从 IndexedDB 加载完整状态到 React 组件树 (`App.tsx`)。修改通过防抖 (Debounce) 机制自动保存回 IndexedDB。

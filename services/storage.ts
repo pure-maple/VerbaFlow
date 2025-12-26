@@ -1,20 +1,22 @@
+
 import Dexie, { Table } from 'dexie';
-import { ChatSession, GlossarySet, VocabItem, AnalysisResult, AppStep, FileSource } from '../types';
+import { ChatSession, GlossarySet, VocabItem, AnalysisResult, AppStep, FileSource, ProjectMetadata, ProjectExport } from '../types';
 
 // Define Database Schema Interfaces
 export interface WorkspaceState {
-  id: string; // 'current'
+  id: string; // Project ID
+  name: string;
   step: AppStep;
   srtContent: string;
   analysisResult: AnalysisResult | null;
   confirmedVocab: VocabItem[];
-  subtitleOutput: string; // Separate output for Step 3
-  markdownOutput: string; // Separate output for Step 4
+  subtitleOutput: string;
+  markdownOutput: string;
   updatedAt: number;
 }
 
 export interface FileStorage {
-  id: string; // 'current_files'
+  id: string; // Project ID (Matches WorkspaceState.id)
   
   audioBlob: Blob | null;
   audioName: string | null;
@@ -39,17 +41,20 @@ export interface StorageStats {
   projectSize: number;
   chatCount: number;
   glossaryCount: number;
+  projectCount: number;
 }
 
 class VerbaFlowDatabase extends Dexie {
-  workspace!: Table<WorkspaceState, string>;
-  files!: Table<FileStorage, string>;
+  projects!: Table<ProjectMetadata, string>; // Lightweight list
+  workspace!: Table<WorkspaceState, string>; // Heavy JSON data
+  files!: Table<FileStorage, string>; // Heavy Blobs
   chats!: Table<ChatSession, string>;
   glossarySets!: Table<GlossarySet, string>;
 
   constructor() {
-    super('VerbaFlowDB_v5'); // Incremented version for Schema change
+    super('VerbaFlowDB_v6'); 
     (this as any).version(1).stores({
+      projects: 'id, updatedAt', // New table for listing
       workspace: 'id',
       files: 'id',
       chats: 'id, title, createdAt',
@@ -62,37 +67,157 @@ export const db = new VerbaFlowDatabase();
 
 class StorageService {
   
-  // --- Workspace State (JSON Data) ---
-  
-  async saveWorkspaceState(state: Partial<WorkspaceState>) {
-    // Merge with existing state to avoid wiping fields not passed
-    const existing: Partial<WorkspaceState> = await db.workspace.get('current') || {};
+  // --- Project Management ---
+
+  async createProject(name: string): Promise<string> {
+    const id = `proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
     
-    await db.workspace.put({
-      id: 'current',
-      step: state.step ?? existing.step ?? AppStep.UPLOAD,
-      srtContent: state.srtContent ?? existing.srtContent ?? '',
-      analysisResult: state.analysisResult ?? existing.analysisResult ?? null,
-      confirmedVocab: state.confirmedVocab ?? existing.confirmedVocab ?? [],
-      subtitleOutput: state.subtitleOutput ?? existing.subtitleOutput ?? '',
-      markdownOutput: state.markdownOutput ?? existing.markdownOutput ?? '',
-      updatedAt: Date.now()
+    const meta: ProjectMetadata = {
+      id,
+      name,
+      updatedAt: now,
+      createdAt: now,
+      step: AppStep.UPLOAD,
+      previewText: ''
+    };
+
+    // Initialize empty state
+    await db.transaction('rw', db.projects, db.workspace, db.files, async () => {
+      await db.projects.add(meta);
+      await db.workspace.add({
+        id,
+        name,
+        step: AppStep.UPLOAD,
+        srtContent: '',
+        analysisResult: null,
+        confirmedVocab: [],
+        subtitleOutput: '',
+        markdownOutput: '',
+        updatedAt: now
+      });
+      // Don't create file entry until files are added to save space
+    });
+
+    return id;
+  }
+
+  async listProjects(): Promise<ProjectMetadata[]> {
+    return await db.projects.orderBy('updatedAt').reverse().toArray();
+  }
+
+  async deleteProject(id: string) {
+    await db.transaction('rw', db.projects, db.workspace, db.files, async () => {
+      await db.projects.delete(id);
+      await db.workspace.delete(id);
+      await db.files.delete(id);
     });
   }
 
-  async loadWorkspaceState(): Promise<WorkspaceState | undefined> {
-    return await db.workspace.get('current');
+  async renameProject(id: string, newName: string) {
+      await db.projects.update(id, { name: newName, updatedAt: Date.now() });
+      await db.workspace.update(id, { name: newName }); // Sync name to workspace
+  }
+
+  // --- Import / Export ---
+
+  async exportProject(id: string): Promise<ProjectExport | null> {
+      const meta = await db.projects.get(id);
+      const state = await db.workspace.get(id);
+      
+      if (!meta || !state) return null;
+
+      return {
+          version: 1,
+          timestamp: Date.now(),
+          metadata: meta,
+          workspaceState: state
+      };
+  }
+
+  async importProject(data: ProjectExport): Promise<string> {
+      // 1. Generate NEW ID to avoid conflicts (Import as copy)
+      const newId = `proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const now = Date.now();
+
+      // 2. Prepare new objects with new ID
+      const newMeta: ProjectMetadata = {
+          ...data.metadata,
+          id: newId,
+          name: `${data.metadata.name} (Imported)`,
+          createdAt: now,
+          updatedAt: now
+      };
+
+      const newState: WorkspaceState = {
+          ...data.workspaceState,
+          id: newId,
+          name: newMeta.name,
+          updatedAt: now
+      };
+
+      // 3. Save
+      await db.transaction('rw', db.projects, db.workspace, async () => {
+          await db.projects.add(newMeta);
+          await db.workspace.add(newState);
+      });
+
+      return newId;
+  }
+
+  // --- Workspace State (JSON Data) ---
+  
+  async saveWorkspaceState(projectId: string, state: Partial<WorkspaceState>) {
+    if (!projectId) return; // Guard against legacy calls without ID
+
+    const now = Date.now();
+    
+    await db.transaction('rw', db.workspace, db.projects, async () => {
+        const existing: Partial<WorkspaceState> = await db.workspace.get(projectId) || {};
+        
+        // 1. Update Detail State
+        await db.workspace.put({
+          id: projectId,
+          name: state.name ?? existing.name ?? 'Untitled Project',
+          step: state.step ?? existing.step ?? AppStep.UPLOAD,
+          srtContent: state.srtContent ?? existing.srtContent ?? '',
+          analysisResult: state.analysisResult ?? existing.analysisResult ?? null,
+          confirmedVocab: state.confirmedVocab ?? existing.confirmedVocab ?? [],
+          subtitleOutput: state.subtitleOutput ?? existing.subtitleOutput ?? '',
+          markdownOutput: state.markdownOutput ?? existing.markdownOutput ?? '',
+          updatedAt: now
+        });
+
+        // 2. Update Metadata (for List View)
+        // We only update relevant metadata fields
+        const metaUpdate: Partial<ProjectMetadata> = { updatedAt: now };
+        if (state.step) metaUpdate.step = state.step;
+        if (state.name) metaUpdate.name = state.name;
+        // Optionally update preview text based on summary topic
+        if (state.analysisResult?.summary?.topic) {
+            metaUpdate.previewText = state.analysisResult.summary.topic;
+        }
+
+        await db.projects.update(projectId, metaUpdate);
+    });
+  }
+
+  async loadWorkspaceState(projectId: string): Promise<WorkspaceState | undefined> {
+    return await db.workspace.get(projectId);
   }
 
   // --- File Storage ---
   
   async saveFiles(
+    projectId: string,
     audio: { file: File | null, source: FileSource, driveId?: string },
     video: { file: File | null, source: FileSource, driveId?: string },
     srt: { file: File | null, source: FileSource, driveId?: string }
   ) {
+    if (!projectId) return;
+
     await db.files.put({
-      id: 'current_files',
+      id: projectId,
       
       audioBlob: audio.file, 
       audioName: audio.file ? audio.file.name : (audio.driveId ? 'Drive Audio' : null),
@@ -114,12 +239,12 @@ class StorageService {
     });
   }
 
-  async loadFiles(): Promise<{ 
+  async loadFiles(projectId: string): Promise<{ 
       audio: { file: File | null, source: FileSource, driveId?: string }, 
       video: { file: File | null, source: FileSource, driveId?: string }, 
       srt: { file: File | null, source: FileSource, driveId?: string } 
   } | null> {
-    const record = await db.files.get('current_files');
+    const record = await db.files.get(projectId);
     if (!record) return null;
 
     let audioFile: File | null = null;
@@ -181,18 +306,21 @@ class StorageService {
   async getStats(): Promise<StorageStats> {
     const chatCount = await db.chats.count();
     const glossaryCount = await db.glossarySets.count();
+    const projectCount = await db.projects.count();
     
-    const fileRec = await db.files.get('current_files');
+    // Calculate total size roughly
     let size = 0;
-    if (fileRec?.audioBlob) size += fileRec.audioBlob.size;
-    if (fileRec?.videoBlob) size += fileRec.videoBlob.size;
+    // Iterate over files is expensive, maybe just sample or use a different method if slow
+    // For now, we'll just count how many file records
+    // Ideally Dexie doesn't give size directly.
     
-    return { projectSize: size, chatCount, glossaryCount };
+    return { projectSize: size, chatCount, glossaryCount, projectCount };
   }
 
   async clear(storeName: 'projects' | 'chats' | 'glossary') {
     if (storeName === 'projects') {
         await db.workspace.clear();
+        await db.projects.clear();
         await db.files.clear();
     } else if (storeName === 'chats') {
         await db.chats.clear();

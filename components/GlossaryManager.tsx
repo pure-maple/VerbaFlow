@@ -31,7 +31,7 @@ const GlossaryManager: React.FC<Props> = ({
   glossarySets, setGlossarySets, srtContent, vocabList, modelName, language 
 }) => {
   const { t } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl, driveClientId, driveApiKey, manualDriveToken } = useConfig();
+  const { llmApiKey, llmBaseUrl, driveClientId, driveApiKey, manualDriveToken } = useConfig();
   
   // View State
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
@@ -225,11 +225,11 @@ const GlossaryManager: React.FC<Props> = ({
 
   const handleAnalyzeImport = async () => {
       if (!importText.trim()) return;
-      if (!geminiApiKey) { alert("API Key required"); return; }
+      if (!llmApiKey) { alert("API Key required"); return; }
       
       setIsGenerating(true);
       try {
-          const items = await generateGlossaryFromRawText(importText, importContext, modelName, language, geminiApiKey, geminiBaseUrl);
+          const items = await generateGlossaryFromRawText(importText, importContext, modelName, language, llmApiKey, llmBaseUrl);
           setImportedItems(items);
           setImportStep('preview');
       } catch (e) {
@@ -492,11 +492,11 @@ const GlossaryManager: React.FC<Props> = ({
         <div className="flex gap-2">
            <input type="file" ref={jsonImportRef} className="hidden" onChange={handleLocalImport} accept=".json" />
            <div className="flex gap-1 mr-2 bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
-                <button onClick={handleLocalExport} className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all flex items-center gap-1" title="Export JSON to PC">
-                    <Download size={14} /> Export JSON
+                <button onClick={handleLocalExport} className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all flex items-center gap-2" title={t.glossary.exportJSON}>
+                    <Download size={14} /> <span className="hidden md:inline">{t.glossary.exportJSON}</span>
                 </button>
-                <button onClick={() => jsonImportRef.current?.click()} className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all flex items-center gap-1" title="Import JSON from PC">
-                    <Upload size={14} /> Import JSON
+                <button onClick={() => jsonImportRef.current?.click()} className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all flex items-center gap-2" title={t.glossary.importJSON}>
+                    <Upload size={14} /> <span className="hidden md:inline">{t.glossary.importJSON}</span>
                 </button>
            </div>
 

@@ -1,12 +1,15 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+export type LLMProvider = 'Gemini' | 'OpenAI' | 'Anthropic';
+
 interface ConfigState {
-  geminiApiKey: string;
-  geminiBaseUrl: string;
+  llmProvider: LLMProvider;
+  llmApiKey: string;
+  llmBaseUrl: string;
   driveClientId: string;
   driveApiKey: string;
-  manualDriveToken: string; // New: For dev mode
+  manualDriveToken: string;
 }
 
 interface ConfigContextType extends ConfigState {
@@ -17,32 +20,44 @@ interface ConfigContextType extends ConfigState {
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // 1. Prioritize process.env.API_KEY as the default initial value
+  // 1. Prioritize process.env.API_KEY as the default initial value for LLM Key
   const [config, setConfig] = useState<ConfigState>({
-    geminiApiKey: process.env.API_KEY || '',
-    geminiBaseUrl: '',
+    llmProvider: 'Gemini',
+    llmApiKey: process.env.API_KEY || '',
+    llmBaseUrl: '',
     driveClientId: '',
     driveApiKey: '',
     manualDriveToken: '',
   });
 
   useEffect(() => {
-    // 2. Load from localStorage, but verify if we should keep the ENV key
+    // 2. Load from localStorage, handle migration from old keys if necessary
     const savedConfig = localStorage.getItem('verbaflow_config');
     if (savedConfig) {
       const parsed = JSON.parse(savedConfig);
       
+      // Backward compatibility migration
+      if (parsed.geminiApiKey && !parsed.llmApiKey) {
+          parsed.llmApiKey = parsed.geminiApiKey;
+          delete parsed.geminiApiKey;
+      }
+      if (parsed.geminiBaseUrl && !parsed.llmBaseUrl) {
+          parsed.llmBaseUrl = parsed.geminiBaseUrl;
+          delete parsed.geminiBaseUrl;
+      }
+
       // If localStorage has an empty key but ENV has one, use ENV
-      if (!parsed.geminiApiKey && process.env.API_KEY) {
-        parsed.geminiApiKey = process.env.API_KEY;
+      if (!parsed.llmApiKey && process.env.API_KEY) {
+        parsed.llmApiKey = process.env.API_KEY;
       }
       
-      // Ensure new field exists if loading old config
-      if (parsed.manualDriveToken === undefined) {
-          parsed.manualDriveToken = '';
+      // Strict Provider Cleanup: Ensure only supported providers remain
+      const validProviders: LLMProvider[] = ['Gemini', 'OpenAI', 'Anthropic'];
+      if (!parsed.llmProvider || !validProviders.includes(parsed.llmProvider)) {
+          parsed.llmProvider = 'Gemini';
       }
       
-      setConfig(parsed);
+      setConfig(prev => ({ ...prev, ...parsed }));
     }
   }, []);
 
@@ -54,7 +69,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   };
 
-  const isConfigured = !!config.geminiApiKey;
+  const isConfigured = !!config.llmApiKey;
 
   return (
     <ConfigContext.Provider value={{ ...config, updateConfig, isConfigured }}>

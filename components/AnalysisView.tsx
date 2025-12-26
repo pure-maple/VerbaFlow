@@ -58,7 +58,7 @@ export const AnalysisView: React.FC<Props> = ({
   defaultFormat = 'srt'
 }) => {
   const { t } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl } = useConfig();
+  const { llmApiKey, llmBaseUrl } = useConfig();
   
   const [vocabList, setVocabList] = useState<ExtendedVocabItem[]>([]);
   const [initialVocab, setInitialVocab] = useState<ExtendedVocabItem[]>([]);
@@ -421,16 +421,16 @@ export const AnalysisView: React.FC<Props> = ({
             .map(v => `${v.corrected} (${v.type})`).join('\n');
             
           if (!vocabText) {
-             setBackgroundTask({ message: "No confirmed terms found.", type: 'error' });
+             setBackgroundTask({ message: t.messages.noTermsFound, type: 'error' });
              setTimeout(() => setBackgroundTask(null), 3000);
              return;
           }
 
           // ASYNC OPERATION
-          const newTerms = await generateSmartGlossary(vocabText, vocabList, 'gemini-3-flash-preview', 'Chinese', geminiApiKey, geminiBaseUrl);
+          const newTerms = await generateSmartGlossary(vocabText, vocabList, 'gemini-3-flash-preview', 'Chinese', llmApiKey, llmBaseUrl);
           
           if (newTerms.length === 0) {
-             setBackgroundTask({ message: "No terms extracted by AI.", type: 'error' });
+             setBackgroundTask({ message: t.messages.noTermsExtracted, type: 'error' });
              setTimeout(() => setBackgroundTask(null), 3000);
              return;
           }
@@ -473,30 +473,30 @@ export const AnalysisView: React.FC<Props> = ({
           }
           
           // 3. Success Notification
-          setBackgroundTask({ message: `Successfully extracted ${newTerms.length} terms!`, type: 'success' });
+          setBackgroundTask({ message: t.messages.extractSuccess.replace('{n}', newTerms.length.toString()), type: 'success' });
           setTimeout(() => setBackgroundTask(null), 4000);
 
       } catch (e) {
           console.error(e);
-          setBackgroundTask({ message: "Extraction failed.", type: 'error' });
+          setBackgroundTask({ message: t.messages.extractFailed, type: 'error' });
           setTimeout(() => setBackgroundTask(null), 4000);
       }
   };
 
   const handleFixTimestamps = async () => {
-      if(!subtitles.length || !geminiApiKey) return;
+      if(!subtitles.length || !llmApiKey) return;
       setIsFixingTime(true);
       try {
           const reconstructedSRT = subtitles.map((s, i) => `${i+1}\n${formatTime(s.startTime)} --> ${formatTime(s.endTime)}\n${s.text}`).join('\n\n');
-          const fixedList = await fixVocabTimestamps(reconstructedSRT, vocabList, geminiApiKey, geminiBaseUrl);
+          const fixedList = await fixVocabTimestamps(reconstructedSRT, vocabList, llmApiKey, llmBaseUrl);
           setVocabList(prev => prev.map(item => {
               const fixed = fixedList.find(f => f.id === item.id);
               return fixed ? { ...item, timeRange: fixed.timeRange } : item;
           }));
-          alert("Timestamps calibrated based on SRT.");
+          alert(t.messages.timestampsFixed);
       } catch (e) {
           console.error(e);
-          alert("Failed to fix timestamps.");
+          alert(t.messages.timestampsFailed);
       } finally {
           setIsFixingTime(false);
       }
@@ -847,7 +847,7 @@ export const AnalysisView: React.FC<Props> = ({
                     onChange={(e) => setTempContext(e.target.value)}
                 />
                 <div className="flex justify-end gap-2 mt-4">
-                    <button onClick={() => setIsInstructionModalOpen(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm">Cancel</button>
+                    <button onClick={() => setIsInstructionModalOpen(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm">{t.common.cancel}</button>
                     <button 
                         onClick={handleInstructionSave}
                         className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2"

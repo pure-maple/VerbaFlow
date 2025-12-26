@@ -7,22 +7,28 @@ import FinalTranscript from './components/FinalTranscript';
 import ChatWidget from './components/ChatWidget';
 import GlossaryManager from './components/GlossaryManager';
 import AgentManager from './components/AgentManager';
+import ProjectList from './components/ProjectList';
 import { AppStep, UploadedFiles, AnalysisResult, VocabItem, SubtitleItem, GlossaryItem, ViewMode, GlossarySet, AnalyzeSelection } from './types';
 import { AnalysisSession, generateFinalTranscript, generatePolishedSubtitle } from './services/geminiService';
 import { parseSubtitleToObjects } from './utils/srtParser';
-import { FileAudio, Layout, BookOpen, Settings, ChevronLeft, ChevronRight, Save, X, Eye, EyeOff, Globe, Moon, Sun, PanelLeftClose, PanelLeftOpen, Database, Trash2, LogOut, Bot, Loader2, Copy, AlertTriangle, Key, ExternalLink, Download, Upload, FileJson } from 'lucide-react';
+import { FileAudio, Layout, BookOpen, Settings, ChevronLeft, ChevronRight, Save, X, Eye, EyeOff, Globe, Moon, Sun, PanelLeftClose, PanelLeftOpen, Database, Trash2, LogOut, Bot, Loader2, Copy, AlertTriangle, Key, ExternalLink, Download, Upload, FileJson, ArrowLeft, Server } from 'lucide-react';
 import { useLanguage } from './contexts/LanguageContext';
-import { ConfigProvider, useConfig } from './contexts/ConfigContext';
+import { ConfigProvider, useConfig, LLMProvider } from './contexts/ConfigContext';
 import { Part } from "@google/genai";
 // import { initGoogleDrive, setManualAccessToken } from './services/googleDriveService'; // Drive Temporarily Disabled
 import { storage, StorageStats } from './services/storage';
 import { ConfirmationModal } from './components/ConfirmationModal';
+import { Toast, ToastType } from './components/Toast';
 
+// ... (DataManagementModal remain same) ...
 // --- SETTINGS MODAL COMPONENT ---
 const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenDataManager: () => void }> = ({ isOpen, onClose, onOpenDataManager }) => {
   const { t } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl, driveClientId, driveApiKey, manualDriveToken, updateConfig } = useConfig();
+  const { llmApiKey, llmBaseUrl, llmProvider, driveClientId, driveApiKey, manualDriveToken, updateConfig } = useConfig();
   const [showApiKey, setShowApiKey] = useState(false);
+
+  // Constants for Providers (Updated to strict list)
+  const providers: LLMProvider[] = ['Gemini', 'OpenAI', 'Anthropic'];
 
   if (!isOpen) return null;
 
@@ -38,18 +44,40 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenData
         </div>
         
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* Gemini Config */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">{t.config.geminiSection}</h3>
+          {/* LLM Provider Config */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <Server size={14} /> {t.config.geminiSection}
+            </h3>
+            
+            {/* Provider Dropdown */}
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.config.providerLabel}</label>
+                <div className="relative">
+                    <select
+                        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors appearance-none cursor-pointer"
+                        value={llmProvider}
+                        onChange={(e) => updateConfig('llmProvider', e.target.value)}
+                    >
+                        {providers.map(p => (
+                            <option key={p} value={p}>{p}</option>
+                        ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <ChevronLeft size={16} className="-rotate-90" />
+                    </div>
+                </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.config.apiKey}</label>
               <div className="relative">
                 <input 
                   type={showApiKey ? "text" : "password"}
                   className="w-full p-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
-                  value={geminiApiKey}
-                  onChange={(e) => updateConfig('geminiApiKey', e.target.value)}
-                  placeholder=""
+                  value={llmApiKey}
+                  onChange={(e) => updateConfig('llmApiKey', e.target.value)}
+                  placeholder="sk-..."
                   autoComplete="off"
                 />
                 <button 
@@ -61,15 +89,23 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenData
                 </button>
               </div>
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.config.baseUrl}</label>
               <input 
                 type="text"
-                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
-                value={geminiBaseUrl}
-                onChange={(e) => updateConfig('geminiBaseUrl', e.target.value)}
-                placeholder="https://..."
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors placeholder:text-slate-400"
+                value={llmBaseUrl}
+                onChange={(e) => updateConfig('llmBaseUrl', e.target.value)}
+                placeholder={llmProvider === 'OpenAI' ? "https://api.openai.com/v1" : llmProvider === 'Anthropic' ? "https://api.anthropic.com/v1" : ""}
               />
+              <p className="text-xs text-slate-500 mt-1">{t.config.baseUrlHelp}</p>
+            </div>
+
+            {/* Multimodal Warning */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 p-3 rounded-lg flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <p>{t.config.multimodalWarning}</p>
             </div>
           </div>
 
@@ -91,12 +127,18 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenData
 
         </div>
 
-        <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
+          >
+            {t.common.cancel}
+          </button>
           <button 
             onClick={onClose}
             className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 flex items-center gap-2"
           >
-            <Save size={16} /> {t.config.saveBtn}
+            <Save size={16} /> {t.common.confirm}
           </button>
         </div>
       </div>
@@ -109,8 +151,6 @@ const DataManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; onCl
   const { t, language } = useLanguage();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const [isExporting, setIsExporting] = useState(false);
-  const importRef = useRef<HTMLInputElement>(null);
   
   const [confirmType, setConfirmType] = useState<'workspace' | 'chats' | 'glossary' | null>(null);
 
@@ -139,86 +179,6 @@ const DataManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; onCl
     setConfirmType(null);
   };
 
-  // --- Export LITE Workspace (JSON Only, No Media) ---
-  const handleExportLite = async () => {
-      setIsExporting(true);
-      try {
-          const ws = await storage.loadWorkspaceState();
-          const files = await storage.loadFiles(); // We only read metadata, ignore blobs
-          const chats = await storage.loadChats();
-          const glossary = await storage.getAllGlossarySets();
-
-          const exportPackage: any = {
-              version: '1.0-lite',
-              timestamp: Date.now(),
-              workspace: ws,
-              chats,
-              glossary,
-              // Metadata only
-              fileMeta: {
-                  audio: files?.audio?.file?.name || null,
-                  video: files?.video?.file?.name || null,
-                  srt: files?.srt?.file?.name || null,
-                  // We SAVE the SRT text content because it is small and critical
-                  srtContent: ws?.srtContent || '' 
-              }
-          };
-
-          const blob = new Blob([JSON.stringify(exportPackage, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          // Use a specific extension for clarity
-          link.download = `verbaflow_project_${new Date().toISOString().slice(0,10)}.vfproj`; 
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-      } catch (e) {
-          console.error(e);
-          alert("Export failed");
-      } finally {
-          setIsExporting(false);
-      }
-  };
-
-  const handleImportLite = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          const file = e.target.files[0];
-          const reader = new FileReader();
-          reader.onload = async (ev) => {
-              try {
-                  const pkg = JSON.parse(ev.target?.result as string);
-                  
-                  // Restore State
-                  if (pkg.workspace) await storage.saveWorkspaceState(pkg.workspace);
-                  if (pkg.chats) await storage.saveChats(pkg.chats);
-                  if (pkg.glossary) {
-                      for(const g of pkg.glossary) await storage.saveGlossarySet(g);
-                  }
-                  
-                  // Restore Files (Metadata only + SRT Text)
-                  let srtFile = null;
-                  if (pkg.fileMeta?.srtContent) {
-                      srtFile = new File([pkg.fileMeta.srtContent], pkg.fileMeta.srt || "restored.srt", { type: "text/plain" });
-                  }
-
-                  await storage.saveFiles(
-                      { file: null, source: 'local' }, // Audio lost
-                      { file: null, source: 'local' }, // Video lost
-                      { file: srtFile, source: 'local' }  // SRT Restored from text
-                  );
-                  
-                  alert(language === 'zh' ? "项目已恢复！(音视频文件需重新关联)" : "Project Restored! (Please re-attach media files)");
-                  window.location.reload();
-              } catch (err) {
-                  console.error(err);
-                  alert("Import failed. Invalid file format.");
-              }
-          };
-          reader.readAsText(file);
-      }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -242,25 +202,6 @@ const DataManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; onCl
         </div>
         
         <div className="p-6">
-          {/* Backup & Restore Section */}
-          <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800">
-              <h4 className="font-bold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center gap-2"><Save size={16}/> {language === 'zh' ? '项目快照 (轻量级)' : 'Project Snapshot (Lite)'}</h4>
-              <p className="text-xs text-indigo-700 dark:text-indigo-300 mb-3 opacity-80 leading-relaxed">
-                  {language === 'zh' 
-                    ? "保存当前的进度、术语库和聊天记录为 .vfproj 文件 (纯文本 JSON)。不包含音视频大文件，恢复后需手动关联媒体。" 
-                    : "Save progress, glossary, and chats as a .vfproj file (JSON text). Excludes media files; re-attach media after restore."}
-              </p>
-              <div className="flex gap-2">
-                  <button onClick={handleExportLite} disabled={isExporting} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center justify-center gap-1 transition-colors">
-                      {isExporting ? <Loader2 className="animate-spin" size={14}/> : <FileJson size={14}/>} {language === 'zh' ? '导出项目文件' : 'Export Project'}
-                  </button>
-                  <input type="file" ref={importRef} className="hidden" accept=".vfproj,.json" onChange={handleImportLite} />
-                  <button onClick={() => importRef.current?.click()} className="flex-1 py-2 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold hover:bg-indigo-50 flex items-center justify-center gap-1 transition-colors">
-                      <Upload size={14}/> {language === 'zh' ? '恢复项目' : 'Restore Project'}
-                  </button>
-              </div>
-          </div>
-
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 font-semibold">{language === 'zh' ? '浏览器存储状态:' : 'Browser Storage Stats:'}</p>
           
           <div className="space-y-4">
@@ -268,7 +209,7 @@ const DataManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; onCl
              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700">
                 <div>
                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{t.data.workspace}</h4>
-                   <p className="text-xs text-slate-500">{stats ? `${(stats.projectSize / (1024*1024)).toFixed(2)} MB` : '...'}</p>
+                   <p className="text-xs text-slate-500">{stats ? `${stats.projectCount} Projects` : '...'}</p>
                 </div>
                 <button onClick={() => initiateClear('workspace')} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t.data.clearBtn}>
                    <Trash2 size={18} />
@@ -307,7 +248,7 @@ const DataManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; onCl
 // --- MAIN APP COMPONENT ---
 const AppContent: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl, driveClientId, driveApiKey, manualDriveToken } = useConfig();
+  const { llmApiKey, llmBaseUrl, llmProvider, driveClientId, driveApiKey, manualDriveToken } = useConfig();
   
   // Navigation & UI State
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.STUDIO);
@@ -315,7 +256,11 @@ const AppContent: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDataMgrOpen, setIsDataMgrOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(true);
+  const [isRestoring, setIsRestoring] = useState(false); 
+
+  // Project Management State
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
 
   // Studio Flow State
   const [step, setStep] = useState<AppStep>(AppStep.UPLOAD);
@@ -329,7 +274,7 @@ const AppContent: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [confirmedVocab, setConfirmedVocab] = useState<VocabItem[]>([]);
   const [glossarySets, setGlossarySets] = useState<GlossarySet[]>([]);
-  const [selectedGlossaryIds, setSelectedGlossaryIds] = useState<string[]>([]); // New: Glossary Selection
+  const [selectedGlossaryIds, setSelectedGlossaryIds] = useState<string[]>([]);
   
   // UI Loading State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -338,7 +283,6 @@ const AppContent: React.FC = () => {
   // OUTPUT STATES (Separated)
   const [subtitleOutput, setSubtitleOutput] = useState('');
   const [markdownOutput, setMarkdownOutput] = useState('');
-  const [transcriptOutput, setTranscriptOutput] = useState(''); // Legacy, keeping for compatibility during migration if needed, but primary logic moves to separated.
   
   // Settings
   const [selectedModel, setSelectedModel] = useState('gemini-3-pro-preview');
@@ -357,6 +301,15 @@ const AppContent: React.FC = () => {
 
   // Restart Confirmation
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+
+  // Toast Notification
+  const [toast, setToast] = useState<{message: string, type: ToastType, isVisible: boolean}>({
+      message: '', type: 'info', isVisible: false
+  });
+
+  const showToast = (message: string, type: ToastType = 'info') => {
+      setToast({ message, type, isVisible: true });
+  };
 
   // Toggle Dark Mode
   useEffect(() => {
@@ -388,84 +341,53 @@ const AppContent: React.FC = () => {
   };
 
   // --- PERSISTENCE LOGIC (IndexedDB with Dexie) ---
+  
+  // Initial Load Glossary Sets only (Projects handled in ProjectList component)
   useEffect(() => {
-    const loadState = async () => {
+    const loadGlobal = async () => {
         try {
-            // 1. Load Lightweight State
-            const parsed = await storage.loadWorkspaceState();
-            if (parsed) {
-                setStep(parsed.step);
-                setFiles(prev => ({ ...prev, srtContent: parsed.srtContent }));
-                if (parsed.analysisResult) setAnalysisResult(parsed.analysisResult);
-                if (parsed.confirmedVocab) setConfirmedVocab(parsed.confirmedVocab);
-                // Load isolated states
-                if (parsed.subtitleOutput) setSubtitleOutput(parsed.subtitleOutput);
-                if (parsed.markdownOutput) setMarkdownOutput(parsed.markdownOutput);
-            }
-            
-            // 2. Load Heavy Files (Blobs) or Drive IDs
-            const savedFiles = await storage.loadFiles();
-            if (savedFiles) {
-                setFiles(prev => ({
-                    ...prev,
-                    audio: savedFiles.audio.file,
-                    audioSource: savedFiles.audio.source,
-                    audioDriveId: savedFiles.audio.driveId,
-                    
-                    video: savedFiles.video.file,
-                    videoSource: savedFiles.video.source,
-                    videoDriveId: savedFiles.video.driveId,
-                    
-                    srt: savedFiles.srt.file,
-                    srtSource: savedFiles.srt.source,
-                    srtDriveId: savedFiles.srt.driveId
-                }));
-            }
-            
-            // 3. Load Glossary
             const sets = await storage.getAllGlossarySets();
             if (sets) setGlossarySets(sets);
-
-        } catch (e) {
-            console.error("Failed to restore workspace state from DB", e);
-        } finally {
-            setIsRestoring(false);
+        } catch(e) {
+            console.error("Glossary load error:", e);
         }
     };
-    loadState();
+    loadGlobal();
   }, []);
 
-  // Save Lightweight State (Debounced)
+  // Save Lightweight State (Debounced) - Only when project is active
   useEffect(() => {
-    if (isRestoring) return;
+    if (isRestoring || !currentProjectId) return;
     
     const stateToSave = {
+      name: currentProjectName || 'Untitled Project',
       step,
       srtContent: files.srtContent,
       analysisResult,
       confirmedVocab,
-      subtitleOutput, // Save separated
+      subtitleOutput,
       markdownOutput
     };
     
     const timer = setTimeout(() => {
-        storage.saveWorkspaceState(stateToSave);
+        storage.saveWorkspaceState(currentProjectId, stateToSave);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [step, files.srtContent, analysisResult, confirmedVocab, subtitleOutput, markdownOutput, isRestoring]);
+  }, [currentProjectId, currentProjectName, step, files.srtContent, analysisResult, confirmedVocab, subtitleOutput, markdownOutput, isRestoring]);
 
   // Save Files Separately (When file objects change)
   useEffect(() => {
-      if (isRestoring) return;
+      if (isRestoring || !currentProjectId) return;
       // We save if ANY source is present (local or drive)
       if (files.audio || files.audioDriveId || files.video || files.videoDriveId || files.srt || files.srtDriveId) {
           storage.saveFiles(
+              currentProjectId,
               { file: files.audio, source: files.audioSource, driveId: files.audioDriveId },
               { file: files.video, source: files.videoSource, driveId: files.videoDriveId },
               { file: files.srt, source: files.srtSource, driveId: files.srtDriveId }
           );
       }
-  }, [files, isRestoring]);
+  }, [files, isRestoring, currentProjectId]);
 
   // --- Automatic Parsing & Sync ---
   useEffect(() => {
@@ -518,164 +440,88 @@ const AppContent: React.FC = () => {
       });
   };
 
-  // Actions
-  const handleStartAnalysis = async (selection: AnalyzeSelection) => {
-    if (!files.srtContent && !selection.video && !selection.audio) {
-        setAnalysisResult({
-            summary: { topic: "Local Media Preview", speakers: [], duration: "", agenda: [] },
-            vocabList: []
-        });
-        setStep(AppStep.CONFIRMATION);
-        return;
-    }
+  // --- Project Management Actions ---
 
-    if (!geminiApiKey) { setIsSettingsOpen(true); return; }
-
-    const activeGlossaryItems = glossarySets
-        .filter(set => selectedGlossaryIds.includes(set.id))
-        .flatMap(s => s.items);
-
-    if (files.audio && !audioUrl) setAudioUrl(URL.createObjectURL(files.audio));
-
-    // KEY CHANGE: Switch to Confirmation View immediately to show loading animation
-    setStep(AppStep.CONFIRMATION);
-    setIsAnalyzing(true);
-    
-    try {
-        // Prepare Multi-modal Parts
-        const mediaParts: Part[] = [];
-
-        // 1. Process Video if selected
-        if (selection.video) {
-            if (files.video && files.videoSource === 'local') {
-                if (files.video.size > 20 * 1024 * 1024) {
-                    alert("Warning: Local video is large (>20MB). Browser processing might be slow or crash. Proceeding...");
-                }
-                const part = await fileToGenerativePart(files.video);
-                mediaParts.push(part);
-            } else if (files.videoDriveId) {
-                // TODO: Implement Drive file fetching for analysis if needed (requires backend usually or complex client logic)
-                // For now, warn user
-                console.warn("Drive file direct analysis not fully supported in this demo without backend relay.");
-            }
-        }
-
-        // 2. Process Audio if selected
-        if (selection.audio) {
-             if (files.audio && files.audioSource === 'local') {
-                const part = await fileToGenerativePart(files.audio);
-                mediaParts.push(part);
-            }
-        }
-
-        // Initialize Project Session
-        projectSessionRef.current = new AnalysisSession(geminiApiKey, geminiBaseUrl, selectedModel);
-        
-        const result = await projectSessionRef.current.start(
-            selection.srt ? files.srtContent : null, 
-            mediaParts,
-            targetLanguage, 
-            activeGlossaryItems
-        );
-        
-        setAnalysisResult(result);
-    } catch (error) {
-        console.error("Analysis failed:", error);
-        alert(t.errors.analysisFailed);
-        setStep(AppStep.UPLOAD); // Go back if failed
-    } finally {
-        setIsAnalyzing(false);
-    }
-  };
-
-  const handleReAnalyzeWithVocab = async (context: string, currentVocab?: VocabItem[]) => {
-      if (!geminiApiKey || !currentVocab) return;
-      
-      setIsAnalyzing(true);
+  const handleCreateProject = async (name: string) => {
+      setIsRestoring(true);
       try {
-          // Dynamic Glossary Lookup for Re-analysis
-          // We grab the fresh glossary state from glossarySets based on selected IDs
-          const activeGlossaryItems = glossarySets
-            .filter(set => selectedGlossaryIds.includes(set.id))
-            .flatMap(s => s.items);
-
-          let result;
-          if (projectSessionRef.current) {
-              // Use existing session for efficient updates
-              // Inject CURRENT Glossary items to ensure the AI knows about new/edited terms
-              result = await projectSessionRef.current.iterate(
-                  currentVocab, 
-                  context, 
-                  targetLanguage,
-                  activeGlossaryItems // NEW: Pass dynamic glossary
-              );
-          } else {
-              // Fallback: If session was lost
-              projectSessionRef.current = new AnalysisSession(geminiApiKey, geminiBaseUrl, selectedModel);
-              // NOTE: This fallback is imperfect as we don't have the original media parts here easily.
-              // It relies on text-only re-analysis or context injection.
-              const fullContext = `User Previous State: ${JSON.stringify(currentVocab)}. New Instruction: ${context}`;
-              // We pass empty media parts for the fallback text-only restart
-              result = await projectSessionRef.current.start(files.srtContent, [], targetLanguage, activeGlossaryItems, fullContext);
-          }
-          setAnalysisResult(result);
+          const id = await storage.createProject(name);
+          // Manually reset state without triggering heavy file saves yet
+          setStep(AppStep.UPLOAD);
+          setFiles({ 
+            audio: null, audioSource: 'local', 
+            video: null, videoSource: 'local', 
+            srt: null, srtSource: 'local', srtContent: '' 
+          });
+          setAnalysisResult(null);
+          setSubtitleOutput('');
+          setMarkdownOutput('');
+          setConfirmedVocab([]);
+          
+          setCurrentProjectId(id);
+          setCurrentProjectName(name);
+          showToast(t.messages.projectCreated, 'success');
       } catch (e) {
-          console.error("Re-analysis failed", e);
-          alert("Re-analysis failed. Please check connection.");
+          console.error(e);
+          showToast(t.messages.projectCreateFailed, 'error');
       } finally {
-          setIsAnalyzing(false);
+          setIsRestoring(false);
       }
   };
 
-  const handleConfirmVocab = async (vocab: VocabItem[], context: string, format: string) => {
-    if (!geminiApiKey) { setIsSettingsOpen(true); return; }
-    setConfirmedVocab(vocab);
-    setStep(AppStep.GENERATION_SRT);
-    setIsGenerating(true);
-    setSubtitleOutput(''); // Clear previous output
+  const handleOpenProject = async (id: string) => {
+      setIsRestoring(true);
+      try {
+          const state = await storage.loadWorkspaceState(id);
+          if (!state) throw new Error("Project not found");
 
-    try {
-      // Use the format passed from the UI selector, defaulting to srt if somehow undefined
-      const outputFormat = format || files.subtitleFormat || 'srt';
-      
-      await generatePolishedSubtitle(files.srtContent, vocab, selectedModel, outputFormat, geminiApiKey, geminiBaseUrl, (chunk) => {
-        setSubtitleOutput(prev => prev + chunk);
-      });
-    } catch (error) {
-      console.error("Subtitle Gen failed:", error);
-      alert(t.errors.generationFailed);
-    } finally {
-      setIsGenerating(false);
-    }
+          const loadedFiles = await storage.loadFiles(id);
+
+          // Update State
+          setCurrentProjectId(id);
+          setCurrentProjectName(state.name);
+          setStep(state.step);
+          setAnalysisResult(state.analysisResult);
+          setConfirmedVocab(state.confirmedVocab);
+          setSubtitleOutput(state.subtitleOutput);
+          setMarkdownOutput(state.markdownOutput);
+          
+          if (loadedFiles) {
+              setFiles({
+                  audio: loadedFiles.audio.file,
+                  audioSource: loadedFiles.audio.source,
+                  audioDriveId: loadedFiles.audio.driveId,
+                  
+                  video: loadedFiles.video.file,
+                  videoSource: loadedFiles.video.source,
+                  videoDriveId: loadedFiles.video.driveId,
+                  
+                  srt: loadedFiles.srt.file,
+                  srtSource: loadedFiles.srt.source,
+                  srtDriveId: loadedFiles.srt.driveId,
+                  
+                  srtContent: state.srtContent,
+              });
+          } else {
+              setFiles(prev => ({ ...prev, srtContent: state.srtContent }));
+          }
+          // showToast("Project loaded", 'success');
+      } catch (e) {
+          console.error(e);
+          showToast(t.messages.projectLoadFailed, 'error');
+          setCurrentProjectId(null);
+      } finally {
+          setIsRestoring(false);
+      }
   };
 
-  const handleProceedToMD = async () => {
-    if (!geminiApiKey) { setIsSettingsOpen(true); return; }
-    setStep(AppStep.GENERATION_MD);
-    setIsGenerating(true);
-    setMarkdownOutput(''); // Clear previous output
-
-    try {
-      await generateFinalTranscript(files.srtContent, confirmedVocab, selectedModel, targetLanguage, geminiApiKey, geminiBaseUrl, (chunk) => {
-        setMarkdownOutput(prev => prev + chunk);
-      });
-    } catch (error) {
-      console.error("MD Gen failed:", error);
-      alert(t.errors.generationFailed);
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleBackToProjects = () => {
+      setCurrentProjectId(null);
+      // Optional: Clear heavy memory?
+      if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+      if (previewVideoUrl) { URL.revokeObjectURL(previewVideoUrl); setPreviewVideoUrl(null); }
   };
 
-  const handleRestartClick = () => {
-      setIsRestartConfirmOpen(true);
-  };
-
-  const handleRestartConfirm = async () => {
-      handleClearWorkspace();
-      await storage.clear('projects');
-  };
-  
   const handleClearWorkspace = () => {
       setStep(AppStep.UPLOAD);
       setFiles({ 
@@ -692,6 +538,143 @@ const AppContent: React.FC = () => {
       if (previewVideoUrl) { URL.revokeObjectURL(previewVideoUrl); setPreviewVideoUrl(null); }
   };
 
+  // Actions (Analysis & Generation) - Same logic as before
+  const handleStartAnalysis = async (selection: AnalyzeSelection) => {
+    if (!files.srtContent && !selection.video && !selection.audio) {
+        setAnalysisResult({
+            summary: { topic: "Local Media Preview", speakers: [], duration: "", agenda: [] },
+            vocabList: []
+        });
+        setStep(AppStep.CONFIRMATION);
+        return;
+    }
+
+    if (!llmApiKey) { setIsSettingsOpen(true); return; }
+
+    const activeGlossaryItems = glossarySets
+        .filter(set => selectedGlossaryIds.includes(set.id))
+        .flatMap(s => s.items);
+
+    if (files.audio && !audioUrl) setAudioUrl(URL.createObjectURL(files.audio));
+
+    setStep(AppStep.CONFIRMATION);
+    setIsAnalyzing(true);
+    
+    try {
+        const mediaParts: Part[] = [];
+        if (selection.video && files.video) {
+             const part = await fileToGenerativePart(files.video);
+             mediaParts.push(part);
+        }
+        if (selection.audio && files.audio) {
+             const part = await fileToGenerativePart(files.audio);
+             mediaParts.push(part);
+        }
+
+        projectSessionRef.current = new AnalysisSession(llmApiKey, llmBaseUrl, selectedModel, llmProvider);
+        
+        const result = await projectSessionRef.current.start(
+            selection.srt ? files.srtContent : null, 
+            mediaParts,
+            targetLanguage, 
+            activeGlossaryItems
+        );
+        
+        setAnalysisResult(result);
+    } catch (error: any) {
+        console.error("Analysis failed:", error);
+        showToast(error.message || t.messages.analysisFailed, 'error');
+        setStep(AppStep.UPLOAD);
+    } finally {
+        setIsAnalyzing(false);
+    }
+  };
+
+  const handleReAnalyzeWithVocab = async (context: string, currentVocab?: VocabItem[]) => {
+      if (!llmApiKey || !currentVocab) return;
+      setIsAnalyzing(true);
+      try {
+          const activeGlossaryItems = glossarySets
+            .filter(set => selectedGlossaryIds.includes(set.id))
+            .flatMap(s => s.items);
+
+          let result;
+          if (projectSessionRef.current) {
+              result = await projectSessionRef.current.iterate(
+                  currentVocab, 
+                  context, 
+                  targetLanguage,
+                  activeGlossaryItems
+              );
+          } else {
+              projectSessionRef.current = new AnalysisSession(llmApiKey, llmBaseUrl, selectedModel, llmProvider);
+              const fullContext = `User Previous State: ${JSON.stringify(currentVocab)}. New Instruction: ${context}`;
+              result = await projectSessionRef.current.start(files.srtContent, [], targetLanguage, activeGlossaryItems, fullContext);
+          }
+          setAnalysisResult(result);
+          showToast(t.messages.reAnalysisComplete, 'success');
+      } catch (e: any) {
+          console.error(e);
+          showToast(e.message || t.messages.reAnalysisFailed, 'error');
+      } finally {
+          setIsAnalyzing(false);
+      }
+  };
+
+  const handleConfirmVocab = async (vocab: VocabItem[], context: string, format: string) => {
+    if (!llmApiKey) { setIsSettingsOpen(true); return; }
+    setConfirmedVocab(vocab);
+    setStep(AppStep.GENERATION_SRT);
+    setIsGenerating(true);
+    setSubtitleOutput('');
+
+    try {
+      const outputFormat = format || files.subtitleFormat || 'srt';
+      await generatePolishedSubtitle(files.srtContent, vocab, selectedModel, outputFormat, llmApiKey, llmBaseUrl, llmProvider, (chunk) => {
+        setSubtitleOutput(prev => prev + chunk);
+      });
+    } catch (error: any) {
+      console.error(error);
+      showToast(error.message || t.messages.generationFailed, 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleProceedToMD = async () => {
+    if (!llmApiKey) { setIsSettingsOpen(true); return; }
+    setStep(AppStep.GENERATION_MD);
+    setIsGenerating(true);
+    setMarkdownOutput('');
+
+    try {
+      await generateFinalTranscript(files.srtContent, confirmedVocab, selectedModel, targetLanguage, llmApiKey, llmBaseUrl, llmProvider, (chunk) => {
+        setMarkdownOutput(prev => prev + chunk);
+      });
+    } catch (error: any) {
+      console.error(error);
+      showToast(error.message || t.messages.generationFailed, 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRestartClick = () => {
+      setIsRestartConfirmOpen(true);
+  };
+
+  const handleRestartConfirm = async () => {
+      // In project mode, this just resets the workflow to Step 1, it doesn't delete the project
+      // But we need to be careful not to nuke the project ID
+      setStep(AppStep.UPLOAD);
+      setAnalysisResult(null);
+      setSubtitleOutput('');
+      setMarkdownOutput('');
+      setConfirmedVocab([]);
+      projectSessionRef.current = null;
+      showToast(t.messages.workspaceReset, 'info');
+  };
+  
   const handleStepClick = (targetStep: AppStep) => {
       if (targetStep === AppStep.UPLOAD) {
           setStep(targetStep);
@@ -706,10 +689,10 @@ const AppContent: React.FC = () => {
 
   if (isRestoring) {
       return (
-          <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+          <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900 animate-in fade-in">
               <div className="flex flex-col items-center gap-3">
                   <Loader2 className="animate-spin text-indigo-600" size={32} />
-                  <p className="text-slate-500 dark:text-slate-400 font-medium">Restoring Workspace...</p>
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">{t.common.loading}</p>
               </div>
           </div>
       );
@@ -720,12 +703,19 @@ const AppContent: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
+      <Toast 
+        message={toast.message} 
+        type={toast.type} 
+        isVisible={toast.isVisible} 
+        onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} 
+      />
+
       <ConfirmationModal 
           isOpen={isRestartConfirmOpen}
           onClose={() => setIsRestartConfirmOpen(false)}
           onConfirm={handleRestartConfirm}
-          title="Start New Task"
-          message="Are you sure? This will clear current progress and reset the workspace."
+          title="Restart Task"
+          message="Are you sure? This will reset progress to Step 1."
           isDanger={true}
       />
 
@@ -740,7 +730,7 @@ const AppContent: React.FC = () => {
         onClearWorkspace={handleClearWorkspace}
       />
 
-      {/* ... (Sidebar and Navigation remain unchanged) ... */}
+      {/* Sidebar */}
       {sidebarState !== 'hidden' && (
         <aside className={`${sidebarState === 'collapsed' ? 'w-20' : 'w-64'} bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all duration-300 shadow-xl z-20`}>
              <div className={`p-4 border-b border-slate-800 flex ${sidebarState === 'collapsed' ? 'justify-center' : 'justify-between items-center'}`}>
@@ -849,76 +839,115 @@ const AppContent: React.FC = () => {
          )}
 
         <main className={`flex-1 bg-slate-50 dark:bg-slate-900 ${mainScrollClass}`}>
+          
+          {/* VIEW: STUDIO */}
           {viewMode === ViewMode.STUDIO && (
             <div className="h-full flex flex-col">
-              <StepIndicator currentStep={step} onStepClick={handleStepClick} />
-              <div className="flex-1 flex flex-col h-full overflow-hidden">
-                {step === AppStep.UPLOAD && (
-                  <div className="px-6 md:px-8 pb-20 overflow-y-auto h-full">
-                    <FileUpload 
-                      files={files} 
-                      setFiles={setFiles} 
-                      onNext={handleStartAnalysis}
-                      selectedModel={selectedModel}
-                      onModelChange={setSelectedModel}
-                      targetLanguage={targetLanguage}
-                      onLanguageChange={setTargetLanguage}
-                      onOpenSettings={() => setIsSettingsOpen(true)}
-                      glossarySets={glossarySets}
-                      selectedGlossaryIds={selectedGlossaryIds}
-                      onGlossarySelectionChange={setSelectedGlossaryIds}
-                    />
-                  </div>
-                )}
+              
+              {/* SUB-VIEW: WORKFLOW (If Project Selected) */}
+              {currentProjectId ? (
+                  <div key="workflow" className="flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+                    {/* Header Bar within Workflow */}
+                    <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between shrink-0 z-20">
+                        <div className="flex items-center gap-3">
+                            <button onClick={handleBackToProjects} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
+                            </button>
+                            <span className="h-6 w-px bg-slate-200 dark:bg-slate-700"></span>
+                            <div>
+                                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                    {currentProjectName || 'Untitled'}
+                                </h2>
+                            </div>
+                        </div>
+                    </div>
 
-                {(step === AppStep.CONFIRMATION) && (
-                  <AnalysisView 
-                    data={analysisResult} // Can be null now
-                    isLoading={isAnalyzing}
-                    onConfirm={handleConfirmVocab}
-                    onRetry={() => setStep(AppStep.UPLOAD)}
-                    onReAnalyze={(ctx, vocab) => handleReAnalyzeWithVocab(ctx, vocab)} // Updated to pass vocab
-                    audioUrl={audioUrl}
-                    videoFile={files.video}
-                    videoDriveId={files.videoDriveId}
-                    previewVideoUrl={previewVideoUrl}
-                    setPreviewVideoUrl={setPreviewVideoUrl}
-                    subtitles={parsedSubtitles}
-                    onOpenGlossary={() => setViewMode(ViewMode.GLOSSARY)}
-                    hasGlossary={glossarySets.some(s => s.items.length > 0)}
-                    onAskAgent={(text) => setAgentPrompt(text)}
-                    defaultFormat={files.subtitleFormat}
-                  />
-                )}
+                    <StepIndicator currentStep={step} onStepClick={handleStepClick} />
+                    
+                    <div className="flex-1 flex flex-col h-full overflow-hidden">
+                        {step === AppStep.UPLOAD && (
+                        <div className="px-6 md:px-8 pb-20 overflow-y-auto h-full">
+                            <FileUpload 
+                            files={files} 
+                            setFiles={setFiles} 
+                            onNext={handleStartAnalysis}
+                            selectedModel={selectedModel}
+                            onModelChange={setSelectedModel}
+                            targetLanguage={targetLanguage}
+                            onLanguageChange={setTargetLanguage}
+                            onOpenSettings={() => setIsSettingsOpen(true)}
+                            glossarySets={glossarySets}
+                            selectedGlossaryIds={selectedGlossaryIds}
+                            onGlossarySelectionChange={setSelectedGlossaryIds}
+                            />
+                        </div>
+                        )}
 
-                {(step === AppStep.GENERATION_SRT || step === AppStep.GENERATION_MD) && (
-                  <div className="px-6 md:px-8 overflow-y-auto h-full">
-                    <FinalTranscript 
-                      content={step === AppStep.GENERATION_SRT ? subtitleOutput : markdownOutput} 
-                      isGenerating={isGenerating}
-                      onRestart={handleRestartClick}
-                      currentStep={step}
-                      onNextStep={step === AppStep.GENERATION_SRT ? handleProceedToMD : undefined}
-                    />
+                        {(step === AppStep.CONFIRMATION) && (
+                        <AnalysisView 
+                            data={analysisResult} // Can be null now
+                            isLoading={isAnalyzing}
+                            onConfirm={handleConfirmVocab}
+                            onRetry={() => setStep(AppStep.UPLOAD)}
+                            onReAnalyze={(ctx, vocab) => handleReAnalyzeWithVocab(ctx, vocab)} // Updated to pass vocab
+                            audioUrl={audioUrl}
+                            videoFile={files.video}
+                            videoDriveId={files.videoDriveId}
+                            previewVideoUrl={previewVideoUrl}
+                            setPreviewVideoUrl={setPreviewVideoUrl}
+                            subtitles={parsedSubtitles}
+                            onOpenGlossary={() => setViewMode(ViewMode.GLOSSARY)}
+                            hasGlossary={glossarySets.some(s => s.items.length > 0)}
+                            onAskAgent={(text) => setAgentPrompt(text)}
+                            defaultFormat={files.subtitleFormat}
+                        />
+                        )}
+
+                        {(step === AppStep.GENERATION_SRT || step === AppStep.GENERATION_MD) && (
+                        <div className="px-6 md:px-8 overflow-y-auto h-full">
+                            <FinalTranscript 
+                            content={step === AppStep.GENERATION_SRT ? subtitleOutput : markdownOutput} 
+                            isGenerating={isGenerating}
+                            onRestart={handleRestartClick}
+                            currentStep={step}
+                            onNextStep={step === AppStep.GENERATION_SRT ? handleProceedToMD : undefined}
+                            />
+                        </div>
+                        )}
+                    </div>
                   </div>
-                )}
-              </div>
+              ) : (
+                  // SUB-VIEW: PROJECT LIST
+                  <div key="projectList" className="flex-1 flex flex-col h-full">
+                      <ProjectList 
+                          onOpenProject={handleOpenProject}
+                          onCreateProject={handleCreateProject}
+                          onShowToast={showToast}
+                      />
+                  </div>
+              )}
             </div>
           )}
 
+          {/* VIEW: GLOSSARY */}
           {viewMode === ViewMode.GLOSSARY && (
-            <GlossaryManager 
-              glossarySets={glossarySets}
-              setGlossarySets={setGlossarySets}
-              srtContent={files.srtContent}
-              vocabList={analysisResult?.vocabList || []}
-              modelName={selectedModel}
-              language={targetLanguage}
-            />
+            <div key="glossary" className="h-full flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                <GlossaryManager 
+                glossarySets={glossarySets}
+                setGlossarySets={setGlossarySets}
+                srtContent={files.srtContent}
+                vocabList={analysisResult?.vocabList || []}
+                modelName={selectedModel}
+                language={targetLanguage}
+                />
+            </div>
           )}
 
+          {/* VIEW: AGENTS */}
           {viewMode === ViewMode.AGENTS && (
-            <AgentManager />
+            <div key="agents" className="h-full flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                <AgentManager />
+            </div>
           )}
         </main>
         

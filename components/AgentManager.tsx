@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useConfig } from '../contexts/ConfigContext';
@@ -10,7 +9,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 
 const AgentManager: React.FC = () => {
   const { t } = useLanguage();
-  const { geminiApiKey, geminiBaseUrl } = useConfig();
+  const { llmApiKey, llmBaseUrl } = useConfig();
   
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -79,7 +78,7 @@ const AgentManager: React.FC = () => {
   };
 
   const handleSend = async () => {
-      if (!input.trim() || !activeSessionId || !geminiApiKey) return;
+      if (!input.trim() || !activeSessionId || !llmApiKey) return;
       
       const userMsg: ChatMessage = {
           id: Date.now().toString(),
@@ -105,7 +104,7 @@ const AgentManager: React.FC = () => {
           }));
 
           let fullRes = "";
-          await chatWithAgent(currentHistory, userMsg.content, activeSession!.model, geminiApiKey, geminiBaseUrl, (chunk) => {
+          await chatWithAgent(currentHistory, userMsg.content, activeSession!.model, llmApiKey, llmBaseUrl, (chunk) => {
               fullRes += chunk;
               setSessions(prev => prev.map(s => {
                   if (s.id !== activeSessionId) return s;
@@ -122,7 +121,7 @@ const AgentManager: React.FC = () => {
 
           // Auto Rename if new
           if (activeSession!.messages.length === 0) {
-              const newTitle = await generateSessionTitle(userMsg.content, geminiApiKey, geminiBaseUrl);
+              const newTitle = await generateSessionTitle(userMsg.content, llmApiKey, llmBaseUrl);
               setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title: newTitle } : s));
           }
 

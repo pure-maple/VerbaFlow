@@ -14,6 +14,23 @@ export enum ViewMode {
 
 export type FileSource = 'local' | 'drive';
 
+export interface ProjectMetadata {
+  id: string;
+  name: string;
+  updatedAt: number;
+  createdAt: number;
+  step: AppStep;
+  previewText?: string; // Short summary or first few words
+}
+
+// New Interface for Export/Import
+export interface ProjectExport {
+  version: number;
+  metadata: ProjectMetadata;
+  workspaceState: any; // Using any to avoid circular dependency with storage types, typically WorkspaceState
+  timestamp: number;
+}
+
 export interface AnalyzeSelection {
   video: boolean;
   audio: boolean;

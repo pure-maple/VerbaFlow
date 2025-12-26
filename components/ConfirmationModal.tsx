@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface Props {
   confirmText?: string;
   cancelText?: string;
   isDanger?: boolean;
+  isLoading?: boolean;
 }
 
 export const ConfirmationModal: React.FC<Props> = ({ 
@@ -21,7 +22,8 @@ export const ConfirmationModal: React.FC<Props> = ({
   message, 
   confirmText = "Confirm", 
   cancelText = "Cancel",
-  isDanger = false
+  isDanger = false,
+  isLoading = false
 }) => {
   if (!isOpen) return null;
 
@@ -35,9 +37,11 @@ export const ConfirmationModal: React.FC<Props> = ({
             {isDanger && <AlertTriangle size={18} className="text-amber-500" />}
             {title}
           </h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
-            <X size={20} />
-          </button>
+          {!isLoading && (
+            <button onClick={onClose} className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -49,18 +53,21 @@ export const ConfirmationModal: React.FC<Props> = ({
           <div className="flex justify-end gap-3 mt-6">
             <button 
                 onClick={onClose} 
-                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-sm transition-colors"
+                disabled={isLoading}
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-sm transition-colors disabled:opacity-50"
             >
                 {cancelText}
             </button>
             <button
-                onClick={() => { onConfirm(); onClose(); }}
-                className={`px-4 py-2 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors ${
+                onClick={onConfirm}
+                disabled={isLoading}
+                className={`px-4 py-2 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center gap-2 ${
                     isDanger 
                     ? 'bg-red-600 hover:bg-red-700' 
                     : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
+                } ${isLoading ? 'opacity-80 cursor-not-allowed' : ''}`}
             >
+                {isLoading && <Loader2 size={16} className="animate-spin" />}
                 {confirmText}
             </button>
           </div>
