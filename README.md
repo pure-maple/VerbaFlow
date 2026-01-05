@@ -12,13 +12,13 @@ VerbaFlow is a professional-grade, privacy-focused linguistic studio designed fo
 
 Unlike cloud-based SaaS platforms, **VerbaFlow runs entirely in your browser**. It leverages powerful LLMs (Google Gemini, OpenAI, Anthropic) to ensure content integrity while providing workflow-specific tools for terminology management, automated proofreading, and subtitle synchronization.
 
-<!-- 
-  TODO: Replace this placeholder with your actual screenshot.
-  1. Create a folder: docs/images
-  2. Take a screenshot of the app and name it: hero.png
-  3. Place it in docs/images/
--->
-![VerbaFlow Interface](./docs/images/hero.png)
+<br/>
+
+<p align="center">
+  <img src="docs/images/hero.png" alt="VerbaFlow Interface" width="100%" style="border-radius: 8px; border: 1px solid #e5e7eb;">
+</p>
+
+<br/>
 
 ## 🌟 Key Features
 
