@@ -69,6 +69,14 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenData
                 </div>
             </div>
 
+            {/* Compatibility Warning for non-Gemini */}
+            {llmProvider !== 'Gemini' && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-3 rounded-lg flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                    <p>{t.config.compatibilityWarning}</p>
+                </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.config.apiKey}</label>
               <div className="relative">
@@ -103,7 +111,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onOpenData
             </div>
 
             {/* Multimodal Warning */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 p-3 rounded-lg flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 p-3 rounded-lg flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
                 <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                 <p>{t.config.multimodalWarning}</p>
             </div>

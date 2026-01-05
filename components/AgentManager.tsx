@@ -4,8 +4,9 @@ import { useConfig } from '../contexts/ConfigContext';
 import { ChatSession, ChatMessage } from '../types';
 import { storage } from '../services/storage';
 import { chatWithAgent, generateSessionTitle } from '../services/geminiService';
-import { MessageSquare, Plus, Trash2, Edit2, Send, Bot, User, Sparkles, Search, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Edit2, Send, Bot, User, Sparkles, Search, MoreHorizontal, ChevronDown, PanelLeftClose, PanelLeftOpen, Command } from 'lucide-react';
 import { ConfirmationModal } from './ConfirmationModal';
+import ReactMarkdown from 'react-markdown';
 
 const AgentManager: React.FC = () => {
   const { t } = useLanguage();
@@ -16,10 +17,25 @@ const AgentManager: React.FC = () => {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMac, setIsMac] = useState(false);
+  
+  // Edit Title State
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+
   const bottomRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   
   // Confirmation State
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  // Platform check
+  useEffect(() => {
+      const platform = navigator.platform.toUpperCase();
+      const userAgent = navigator.userAgent.toUpperCase();
+      setIsMac(platform.indexOf('MAC') >= 0 || userAgent.indexOf('MAC') >= 0);
+  }, []);
 
   // Load History
   useEffect(() => {
@@ -43,6 +59,13 @@ const AgentManager: React.FC = () => {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [sessions, activeSessionId, isTyping]);
 
+  // Focus Title Edit
+  useEffect(() => {
+      if (editingTitleId && titleInputRef.current) {
+          titleInputRef.current.focus();
+      }
+  }, [editingTitleId]);
+
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
   const handleCreateSession = () => {
@@ -55,6 +78,7 @@ const AgentManager: React.FC = () => {
       };
       setSessions(prev => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
+      if (window.innerWidth < 768) setIsSidebarOpen(false); // Auto close sidebar on mobile
   };
 
   const initiateDeleteSession = (e: React.MouseEvent, id: string) => {
@@ -77,7 +101,22 @@ const AgentManager: React.FC = () => {
       }
   };
 
+  // --- Renaming Logic ---
+  const startRename = (e: React.MouseEvent, session: ChatSession) => {
+      e.stopPropagation();
+      setEditingTitleId(session.id);
+      setEditingTitleValue(session.title);
+  };
+
+  const saveRename = () => {
+      if (editingTitleId && editingTitleValue.trim()) {
+          setSessions(prev => prev.map(s => s.id === editingTitleId ? { ...s, title: editingTitleValue.trim() } : s));
+      }
+      setEditingTitleId(null);
+  };
+
   const handleSend = async () => {
+      if (isTyping) return; // Guard against duplicate sends
       if (!input.trim() || !activeSessionId || !llmApiKey) return;
       
       const userMsg: ChatMessage = {
@@ -144,12 +183,22 @@ const AgentManager: React.FC = () => {
           isDanger={true}
       />
 
-      {/* Sidebar List */}
-      <div className="w-80 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-                  <Bot className="text-indigo-600" /> {t.agents.title}
-              </h2>
+      {/* Sidebar List (Collapsible) */}
+      <div className={`
+          ${isSidebarOpen ? 'w-80' : 'w-0'} 
+          bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 
+          flex flex-col h-full transition-all duration-300 overflow-hidden relative
+      `}>
+          {/* Sidebar Header - Adjusted width logic */}
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 w-full shrink-0">
+              <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 truncate">
+                      <Bot className="text-indigo-600 shrink-0" /> <span className="truncate">{t.agents.title}</span>
+                  </h2>
+                  <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0">
+                      <PanelLeftClose size={20} />
+                  </button>
+              </div>
               <button 
                   onClick={handleCreateSession}
                   className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
@@ -158,8 +207,9 @@ const AgentManager: React.FC = () => {
               </button>
           </div>
           
-          <div className="p-2">
-              <div className="relative">
+          {/* Search - Adjusted width logic */}
+          <div className="p-2 w-full shrink-0">
+              <div className="relative w-full">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input 
                       className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-900 border-none rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -170,56 +220,86 @@ const AgentManager: React.FC = () => {
               </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {/* List - Flexible Height with min-h-0 to allow scrolling */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 w-full min-h-0">
               {sessions
                 .filter(s => s.title.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(session => (
                   <div 
                       key={session.id}
                       onClick={() => setActiveSessionId(session.id)}
-                      className={`group p-3 rounded-lg cursor-pointer transition-all flex justify-between items-start ${
+                      className={`w-full group p-3 rounded-lg cursor-pointer transition-all flex justify-between items-start ${
                           activeSessionId === session.id 
                           ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 border' 
                           : 'hover:bg-slate-100 dark:hover:bg-slate-700 border border-transparent'
                       }`}
                   >
-                      <div className="flex-1 min-w-0">
-                          <h4 className={`text-sm font-semibold truncate ${activeSessionId === session.id ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-700 dark:text-slate-300'}`}>
-                              {session.title}
-                          </h4>
+                      <div className="flex-1 min-w-0 mr-2">
+                          {editingTitleId === session.id ? (
+                              <input 
+                                  ref={titleInputRef}
+                                  className="w-full text-sm font-semibold bg-white dark:bg-slate-900 border border-indigo-500 rounded px-1 outline-none"
+                                  value={editingTitleValue}
+                                  onChange={(e) => setEditingTitleValue(e.target.value)}
+                                  onBlur={saveRename}
+                                  onKeyDown={(e) => { if(e.key === 'Enter') saveRename(); }}
+                                  onClick={(e) => e.stopPropagation()}
+                              />
+                          ) : (
+                              <h4 className={`text-sm font-semibold truncate ${activeSessionId === session.id ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-700 dark:text-slate-300'}`} title={session.title}>
+                                  {session.title}
+                              </h4>
+                          )}
                           <p className="text-xs text-slate-500 truncate mt-1">
                               {session.messages.length > 0 ? session.messages[session.messages.length - 1].content : "Empty conversation"}
                           </p>
                       </div>
-                      <button 
-                          onClick={(e) => initiateDeleteSession(e, session.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity"
-                      >
-                          <Trash2 size={14} />
-                      </button>
+                      
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                              onClick={(e) => startRename(e, session)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                              title="Rename"
+                          >
+                              <Edit2 size={14} />
+                          </button>
+                          <button 
+                              onClick={(e) => initiateDeleteSession(e, session.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                              title="Delete"
+                          >
+                              <Trash2 size={14} />
+                          </button>
+                      </div>
                   </div>
               ))}
           </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-900 relative">
+      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-900 relative min-w-0">
           {activeSession ? (
               <>
-                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-between items-center shadow-sm z-10">
-                      <div>
-                          <h3 className="font-bold text-slate-800 dark:text-slate-100">{activeSession.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-slate-500">{t.agents.modelSelect}:</span>
-                              <select 
-                                value={activeSession.model} 
-                                onChange={(e) => handleChangeModel(e.target.value)}
-                                className="text-xs bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-0.5 outline-none cursor-pointer"
-                              >
-                                  <option value="gemini-3-flash-preview">Gemini 3.0 Flash</option>
-                                  <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
-                                  <option value="gemini-2.5-flash-preview">Gemini 2.5 Flash</option>
-                              </select>
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-between items-center shadow-sm z-10 shrink-0">
+                      <div className="flex items-center gap-3">
+                          {!isSidebarOpen && (
+                              <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                                  <PanelLeftOpen size={20} />
+                              </button>
+                          )}
+                          <div>
+                              <h3 className="font-bold text-slate-800 dark:text-slate-100">{activeSession.title}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500">{t.agents.modelSelect}:</span>
+                                  <select 
+                                    value={activeSession.model} 
+                                    onChange={(e) => handleChangeModel(e.target.value)}
+                                    className="text-xs bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-0.5 outline-none cursor-pointer text-slate-700 dark:text-slate-300"
+                                  >
+                                      <option value="gemini-3-flash-preview">Gemini 3.0 Flash</option>
+                                      <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
+                                  </select>
+                              </div>
                           </div>
                       </div>
                   </div>
@@ -237,7 +317,17 @@ const AgentManager: React.FC = () => {
                                   ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700' 
                                   : 'bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900/30'
                               }`}>
-                                  <div className="whitespace-pre-wrap text-slate-800 dark:text-slate-200">{msg.content}</div>
+                                  <div className={`markdown-body prose ${msg.role === 'user' ? 'prose-invert' : 'dark:prose-invert'} prose-sm max-w-none break-words`}>
+                                      <ReactMarkdown 
+                                          components={{
+                                              p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                              a: ({node, ...props}) => <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                                              code: ({node, ...props}) => <code className="bg-black/10 dark:bg-white/10 rounded px-1" {...props} />
+                                          }}
+                                      >
+                                          {msg.content}
+                                      </ReactMarkdown>
+                                  </div>
                               </div>
                           </div>
                       ))}
@@ -258,7 +348,7 @@ const AgentManager: React.FC = () => {
                       <div ref={bottomRef} />
                   </div>
 
-                  <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0">
                       <div className="max-w-4xl mx-auto relative">
                           <textarea 
                               className="w-full p-4 pr-12 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-slate-800 dark:text-slate-200"
@@ -267,7 +357,8 @@ const AgentManager: React.FC = () => {
                               value={input}
                               onChange={e => setInput(e.target.value)}
                               onKeyDown={e => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                  // CHANGED: Use Ctrl+Enter or Cmd+Enter to send
+                                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                                       e.preventDefault();
                                       handleSend();
                                   }
@@ -281,12 +372,23 @@ const AgentManager: React.FC = () => {
                               <Send size={18} />
                           </button>
                       </div>
+                      <div className="flex justify-end mt-1 mr-1 max-w-4xl mx-auto">
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                            {isMac ? <Command size={10} /> : <span className="font-bold text-[9px] border border-slate-300 dark:border-slate-600 rounded px-0.5">Ctrl</span>}
+                            <span>+ Enter to send</span>
+                        </span>
+                      </div>
                   </div>
               </>
           ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                   <Bot size={64} className="mb-4 opacity-20" />
                   <p>{t.agents.placeholder}</p>
+                  {!isSidebarOpen && (
+                      <button onClick={() => setIsSidebarOpen(true)} className="mt-4 flex items-center gap-2 text-indigo-600 hover:underline">
+                          <PanelLeftOpen size={16} /> {t.agents.toggleSidebar}
+                      </button>
+                  )}
               </div>
           )}
       </div>

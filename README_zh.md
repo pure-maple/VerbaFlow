@@ -12,7 +12,13 @@ VerbaFlow 是一款专为音视频内容创作者、译者和校对人员设计�
 
 与传统的云端 SaaS 平台不同，VerbaFlow **完全在您的浏览器中运行**。它利用 Google Gemini、OpenAI 或 Anthropic 等先进大模型的能力，在确保数据隐私的前提下，提供术语管理、自动化校对、字幕生成和一致性检查等工作流。
 
-![VerbaFlow Interface](https://via.placeholder.com/800x450?text=VerbaFlow+Studio+Interface)
+<!-- 
+  TODO: 请替换为您的实际截图。
+  1. 创建文件夹: docs/images
+  2. 截图并将图片命名为: hero.png
+  3. 放入 docs/images/
+-->
+![VerbaFlow Interface](./docs/images/hero.png)
 
 ## 🌟 核心功能
 
@@ -84,8 +90,8 @@ VerbaFlow 是一款专为音视频内容创作者、译者和校对人员设计�
 
 ## 📖 文档资源
 
-*   [架构概览](./docs/ARCHITECTURE.md) - 了解系统设计与数据流。
-*   [贡献指南](./docs/CONTRIBUTING.md) - 学习如何添加新服务商或功能。
+*   [架构概览 (Architecture)](./docs/ARCHITECTURE_zh.md) - 了解系统设计与数据流。
+*   [贡献指南 (Contributing)](./docs/CONTRIBUTING_zh.md) - 学习如何添加新服务商或功能。
 
 ## 开源协议
 

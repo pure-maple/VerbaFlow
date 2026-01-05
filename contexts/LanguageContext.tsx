@@ -89,7 +89,8 @@ export const translations = {
       apiKey: "API Key",
       baseUrl: "Base URL (Optional)",
       baseUrlHelp: "Enter custom endpoint URL. Leave empty for default.",
-      multimodalWarning: "Note: Audio/Video analysis requires a model with native multimodal capabilities (e.g., Gemini 3 Pro, GPT-5.2).",
+      multimodalWarning: "Note: Audio/Video analysis requires a model with native multimodal capabilities (e.g., Gemini 3 Pro).",
+      compatibilityWarning: "Compatibility Notice: VerbaFlow is highly optimized for Gemini models. Using OpenAI or Anthropic may result in limited functionality (e.g., no native video analysis) or unexpected errors.",
       driveSection: "Google Drive Integration",
       driveClientId: "Client ID",
       driveApiKey: "API Key (Drive Scope)",
@@ -285,7 +286,8 @@ export const translations = {
       newChat: "New Chat",
       placeholder: "Select a chat to start messaging...",
       searchPlaceholder: "Search conversations...",
-      modelSelect: "Model"
+      modelSelect: "Model",
+      toggleSidebar: "Toggle Sidebar"
     },
     srt: {
       title: "Step 3: Generate Polished Subtitle",
@@ -301,19 +303,22 @@ export const translations = {
       startNew: "Start New Task"
     },
     chat: {
-      title: "Quick Assist",
+      title: "VerbaFlow Assistant",
       newChat: "New",
       history: "History",
+      backToChat: "Back to Chat",
       inputPlaceholder: "Ask me anything...",
       send: "Send",
       model: "Model",
       rename: "Rename",
       delete: "Delete",
       saveTitle: "Save",
-      welcomeTitle: "VerbaFlow AI Agent",
+      welcomeTitle: "VerbaFlow AI Assistant",
       welcomeSubtitle: "I am your integrated AI assistant. Feel free to ask about the app, check terminology, or discuss any topic.",
       startBtn: "Start Conversation",
-      export: "Export Chat"
+      export: "Export Chat",
+      fullscreen: "Full Screen",
+      exitFullscreen: "Exit Full Screen"
     },
     data: {
       title: "Data Management",
@@ -422,7 +427,8 @@ export const translations = {
       apiKey: "API Key (密钥)",
       baseUrl: "Base URL (代理地址/可选)",
       baseUrlHelp: "用于兼容的中转接口地址。留空则使用默认官方地址。",
-      multimodalWarning: "注意：解析音视频素材需要大模型本身支持多模态能力 (如 Gemini 3 Pro, GPT-5.2)。",
+      multimodalWarning: "注意：解析音视频素材需要大模型本身支持多模态能力 (如 Gemini 3 Pro)。",
+      compatibilityWarning: "兼容性警告：VerbaFlow 核心功能已针对 Gemini 模型深度优化。使用 OpenAI 或 Anthropic 可能会导致功能受限（如无法进行原生视频分析）或出现未知错误。",
       driveSection: "Google Drive 集成",
       driveClientId: "Client ID (客户端 ID)",
       driveApiKey: "API Key (Drive 权限)",
@@ -619,7 +625,8 @@ export const translations = {
       newChat: "新建会话",
       placeholder: "请选择一个会话开始消息...",
       searchPlaceholder: "搜索话题关键字...",
-      modelSelect: "模型"
+      modelSelect: "模型",
+      toggleSidebar: "显示/隐藏侧边栏"
     },
     srt: {
       title: "第三步：生成精校字幕",
@@ -635,19 +642,22 @@ export const translations = {
       startNew: "开始新任务"
     },
     chat: {
-      title: "快速助手",
+      title: "语流助手",
       newChat: "新建",
-      history: "历史",
+      history: "历史记录",
+      backToChat: "返回对话",
       inputPlaceholder: "有问题尽管问...",
       send: "发送",
       model: "模型",
       rename: "重命名",
       delete: "删除",
       saveTitle: "保存",
-      welcomeTitle: "VerbaFlow 智能助手",
+      welcomeTitle: "VerbaFlow 语流助手",
       welcomeSubtitle: "我是您的内置 AI 助手。您可以询问关于本应用的问题，查询术语，或者讨论任何话题。",
       startBtn: "开始对话",
-      export: "导出对话"
+      export: "导出对话",
+      fullscreen: "全屏模式",
+      exitFullscreen: "退出全屏"
     },
     data: {
       title: "数据存储管理",

@@ -512,7 +512,7 @@ export const generateSessionTitle = async (firstMessage: string, apiKey: string,
     const ai = new GoogleGenAI({ apiKey, baseUrl: baseUrl || undefined } as any);
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Generate short title: ${firstMessage}`,
+        contents: `Generate a very short, concise title (max 5 words) for this conversation based on the first message: "${firstMessage.slice(0, 200)}". Output the title only.`,
     });
     return response.text?.trim() || "New Chat";
 };

@@ -83,7 +83,7 @@ class StorageService {
     };
 
     // Initialize empty state
-    await db.transaction('rw', db.projects, db.workspace, db.files, async () => {
+    await (db as any).transaction('rw', db.projects, db.workspace, db.files, async () => {
       await db.projects.add(meta);
       await db.workspace.add({
         id,
@@ -107,7 +107,7 @@ class StorageService {
   }
 
   async deleteProject(id: string) {
-    await db.transaction('rw', db.projects, db.workspace, db.files, async () => {
+    await (db as any).transaction('rw', db.projects, db.workspace, db.files, async () => {
       await db.projects.delete(id);
       await db.workspace.delete(id);
       await db.files.delete(id);
@@ -157,7 +157,7 @@ class StorageService {
       };
 
       // 3. Save
-      await db.transaction('rw', db.projects, db.workspace, async () => {
+      await (db as any).transaction('rw', db.projects, db.workspace, async () => {
           await db.projects.add(newMeta);
           await db.workspace.add(newState);
       });
@@ -172,7 +172,7 @@ class StorageService {
 
     const now = Date.now();
     
-    await db.transaction('rw', db.workspace, db.projects, async () => {
+    await (db as any).transaction('rw', db.workspace, db.projects, async () => {
         const existing: Partial<WorkspaceState> = await db.workspace.get(projectId) || {};
         
         // 1. Update Detail State

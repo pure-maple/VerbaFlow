@@ -1,6 +1,8 @@
 
 # Developer Guide & Contributing
 
+> **[中文指南 (Chinese Version)](./CONTRIBUTING_zh.md)**
+
 Thank you for your interest in improving VerbaFlow! This guide will help you understand the codebase and how to add new features.
 
 ## 📂 Project Structure
