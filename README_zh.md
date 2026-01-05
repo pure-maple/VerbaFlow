@@ -12,13 +12,19 @@ VerbaFlow 是一款专为音视频内容创作者、译者和校对人员设计�
 
 与传统的云端 SaaS 平台不同，VerbaFlow **完全在您的浏览器中运行**。它利用 Google Gemini、OpenAI 或 Anthropic 等先进大模型的能力，在确保数据隐私的前提下，提供术语管理、自动化校对、字幕生成和一致性检查等工作流。
 
-![VerbaFlow 界面](docs/images/hero.png)
+<br/>
+
+<p align="center">
+  <img src="docs/images/hero.png" alt="VerbaFlow Interface" width="100%" style="border-radius: 8px; border: 1px solid #e5e7eb;">
+</p>
+
+<br/>
 
 ## 🌟 核心功能
 
 ### 1. 🤖 多模型服务商支持
 *   **Gemini (原生多模态)**：推荐用于直接分析视频/音频文件，以及处理超长上下文。
-*   **OpenAI / Anthropic**：支持 GPT-4o、Claude 3.5 Sonnet，通过标准协议提供高精度的文本校对与润色。
+*   **OpenAI / Anthropic**：支持 ChatGPT、Claude 等模型，通过标准协议提供高精度的文本校对与润色。
 *   **灵活配置**：支持自定义 Base URL (代理)，可随时在不同模型间切换。
 
 ### 2. 🎧 智能校对工作台
@@ -53,8 +59,8 @@ VerbaFlow 是一款专为音视频内容创作者、译者和校对人员设计�
 
 1.  **克隆仓库**
     ```bash
-    git clone https://github.com/yourusername/verbaflow.git
-    cd verbaflow
+    git clone https://github.com/pure-maple/VerbaFlow.git
+    cd VerbaFlow
     ```
 
 2.  **安装依赖**

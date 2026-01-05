@@ -12,13 +12,19 @@ VerbaFlow is a professional-grade, privacy-focused linguistic studio designed fo
 
 Unlike cloud-based SaaS platforms, **VerbaFlow runs entirely in your browser**. It leverages powerful LLMs (Google Gemini, OpenAI, Anthropic) to ensure content integrity while providing workflow-specific tools for terminology management, automated proofreading, and subtitle synchronization.
 
-![VerbaFlow Interface](docs/images/hero.png)
+<br/>
+
+<p align="center">
+  <img src="docs/images/hero.png" alt="VerbaFlow Interface" width="100%" style="border-radius: 8px; border: 1px solid #e5e7eb;">
+</p>
+
+<br/>
 
 ## 🌟 Key Features
 
 ### 1. 🤖 Multi-Provider AI Support
 *   **Gemini (Native Multimodal)**: Best for direct video/audio analysis and large context windows.
-*   **OpenAI / Anthropic**: Support for GPT-4o, Claude 3.5 Sonnet via standard protocols for high-precision text proofreading.
+*   **OpenAI / Anthropic**: Support for ChatGPT, Claude models via standard protocols for high-precision text proofreading.
 *   **Flexible Config**: Switch models and providers on the fly based on your task requirements.
 
 ### 2. 🎧 Intelligent Studio
@@ -53,8 +59,8 @@ Unlike cloud-based SaaS platforms, **VerbaFlow runs entirely in your browser**. 
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/yourusername/verbaflow.git
-    cd verbaflow
+    git clone https://github.com/pure-maple/VerbaFlow.git
+    cd VerbaFlow
     ```
 
 2.  **Install dependencies**
