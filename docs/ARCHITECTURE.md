@@ -52,8 +52,25 @@ We use `Dexie.js` to manage **IndexedDB**, which allows storing large blobs (vid
 4.  **`glossarySets`**: Global terminology sets.
 5.  **`chats`**: Agent conversation history.
 
-## 4. State Management
+## 4. Frontend State Strategy
 
-*   **Global Config**: `ConfigContext` stores API Keys and Provider selection. Persisted in `LocalStorage`.
-*   **UI State**: `LanguageContext` handles i18n.
+### 4.1 Global Config
+*   **ConfigContext**: Stores API Keys and Provider selection. Persisted in `LocalStorage`.
+*   **LanguageContext**: Handles i18n switching.
+
+### 4.2 Media Lifecycle Management (New in v0.7)
+To ensure smooth playback and prevent memory leaks, we employ a strict resource management strategy in `App.tsx` and `AnalysisView.tsx`:
+
+1.  **Blob URL Management**:
+    *   `URL.createObjectURL` is called *only* when file state changes in `App.tsx`.
+    *   **Strict Cleanup**: A `useEffect` cleanup function explicitly calls `URL.revokeObjectURL` whenever the file changes or the component unmounts. This prevents the browser's Blob registry from growing indefinitely.
+
+2.  **Unified Media Engine (Singleton Pattern)**:
+    *   The player does **not** conditionally render `<video>` vs `<audio>` tags based on view mode.
+    *   **Single Element**: A single `<video>` element handles both video and audio playback.
+    *   **Visual Logic**: When in "Audio Mode", the video element is visually hidden (opacity/z-index), and a "Lyrics/Visualization" layer is superimposed.
+    *   **Benefit**: This allows instant switching between modes without reloading the media stream, preserving buffering and playback position perfectly.
+
+## 5. State Management
+
 *   **Project State**: Loaded from IndexedDB into React Component State (`App.tsx`) when a project is opened. Autosaved back to IndexedDB via a debounced `useEffect`.

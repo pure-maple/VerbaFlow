@@ -4,13 +4,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- IMPORTANT: Ensures the full origin is sent to Google Auth, fixing 400 errors in preview envs -->
     <meta name="referrer" content="origin" />
     <title>VerbaFlow - AI Terminology & Transcript Suite</title>
+    
+    <!-- SYSTEM POLYFILLS: Required for @google/genai SDK in browser environment -->
+    <script>
+      window.global = window;
+      window.process = {
+        env: { NODE_ENV: 'production' },
+        version: '',
+        nextTick: (cb) => setTimeout(cb, 0)
+      };
+    </script>
+    <script type="module">
+      import { Buffer } from "https://esm.sh/buffer@6.0.3";
+      window.Buffer = Buffer;
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
-        darkMode: 'class', // Changed from 'media' to 'class' to support manual toggling
+        darkMode: 'class', 
         theme: {
           extend: {
             colors: {
@@ -19,6 +33,9 @@
                 900: '#0f172a',
                 950: '#020617',
               }
+            },
+            animation: {
+              'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             }
           }
         }
@@ -26,21 +43,27 @@
     </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
+    
+    <!-- CRITICAL FIX: explicit 'deps=react@18.2.0' prevents duplicate React instances -->
     <script type="importmap">
 {
   "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
+    "react-dom": "https://esm.sh/react-dom@18.2.0?deps=react@18.2.0",
+    "@google/genai": "https://esm.sh/@google/genai@latest?target=es2022",
+    "lucide-react": "https://esm.sh/lucide-react@0.468.0?deps=react@18.2.0",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1?bundle&deps=react@18.2.0",
+    "dexie": "https://esm.sh/dexie@4.0.8",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "dexie": "https://esm.sh/dexie@^4.0.1"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
 </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200">
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

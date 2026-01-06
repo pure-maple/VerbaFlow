@@ -6,10 +6,11 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 interface Props {
   currentStep: AppStep;
+  maxStep: AppStep;
   onStepClick?: (step: AppStep) => void;
 }
 
-const StepIndicator: React.FC<Props> = ({ currentStep, onStepClick }) => {
+const StepIndicator: React.FC<Props> = ({ currentStep, maxStep, onStepClick }) => {
   const { t } = useLanguage();
 
   const steps = [
@@ -27,29 +28,35 @@ const StepIndicator: React.FC<Props> = ({ currentStep, onStepClick }) => {
           {steps.map((step, index) => {
             const isCompleted = step.id < currentStep;
             const isCurrent = step.id === currentStep;
+            // Allow navigation if step <= maxStep
+            const isReachable = step.id <= maxStep;
 
             return (
               <div key={step.id} className="flex flex-col items-center flex-1 relative">
                 {/* Connecting Line */}
                 {index !== 0 && (
                   <div className={`absolute top-4 left-[-50%] right-[50%] h-0.5 ${
-                    step.id <= currentStep ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'
+                    step.id <= maxStep ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'
                   }`} />
                 )}
                 
                 <button 
-                  onClick={() => onStepClick && onStepClick(step.id)}
-                  disabled={!onStepClick}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-colors duration-300 ${
-                    isCompleted || isCurrent 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                  } ${onStepClick ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+                  onClick={() => onStepClick && isReachable && onStepClick(step.id)}
+                  disabled={!onStepClick || !isReachable}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all duration-300 ${
+                    isCurrent 
+                      ? 'bg-indigo-600 text-white shadow-md ring-4 ring-indigo-50 dark:ring-indigo-900/30' 
+                      : isCompleted
+                        ? 'bg-indigo-600 text-white'
+                        : isReachable
+                            ? 'bg-white border-2 border-indigo-600 text-indigo-600 cursor-pointer hover:bg-indigo-50'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
+                  } ${isReachable && onStepClick ? 'cursor-pointer hover:scale-110' : ''}`}
                 >
                   {isCompleted ? <Check size={16} /> : <span className="text-sm font-semibold">{step.id}</span>}
                 </button>
                 <span className={`mt-2 text-xs font-medium uppercase tracking-wider ${
-                  isCurrent ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
+                  isCurrent ? 'text-indigo-600 dark:text-indigo-400 font-bold' : (isReachable ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500')
                 }`}>
                   {step.label}
                 </span>

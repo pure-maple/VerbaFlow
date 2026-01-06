@@ -1,7 +1,6 @@
 
 import { GoogleGenAI, Type, Schema, Chat, Part } from "@google/genai";
 import { AnalysisResult, VocabItem, GlossaryItem } from "../types";
-import { isValidSubtitleFormat } from "../utils/srtParser";
 import { LLMProvider } from "../contexts/ConfigContext";
 
 const SYSTEM_INSTRUCTION = `
@@ -13,9 +12,15 @@ Principles:
 2. Timestamp Accuracy: Adhere strictly to the provided SRT.
 3. Proofreading: Correct typos, proper nouns, and technical terms.
 4. Contextual Awareness: Use provided glossaries and extra context instructions.
+
+Status Logic for 'vocabList':
+- Use "corrected": When you are confident the term needs fixing based on context/glossary.
+- Use "needs_confirmation": When the term is ambiguous, might be a proper noun, or you are unsure and want the HUMAN to check.
+- Use "check_spelling": For simple typos.
+- STRICT RULE: DO NOT output "ai_recheck" or "custom" in your initial analysis. These statuses are reserved for the user to signal YOU to review specific items later.
 `;
 
-const CHAT_SYSTEM_INSTRUCTION = `
+export const DEFAULT_CHAT_SYSTEM_INSTRUCTION = `
 You are VerbaFlow's intelligent assistant.
 Your Identity & Capabilities:
 1. **General Assistant**: Answer questions, explain concepts, write code.
@@ -23,6 +28,42 @@ Your Identity & Capabilities:
 3. **Helper**: Explain grammar, define terms, offer translation suggestions.
 Tone: Helpful, Professional, yet Conversational.
 `;
+
+// Schema for Analysis Result
+const ANALYSIS_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    summary: {
+      type: Type.OBJECT,
+      properties: {
+        topic: { type: Type.STRING },
+        speakers: { type: Type.ARRAY, items: { type: Type.STRING } },
+        duration: { type: Type.STRING },
+        agenda: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      required: ["topic", "speakers", "duration", "agenda"]
+    },
+    vocabList: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.INTEGER },
+          timeRange: { type: Type.STRING },
+          original: { type: Type.STRING },
+          corrected: { type: Type.STRING },
+          type: { type: Type.STRING },
+          status: { type: Type.STRING, enum: ['corrected', 'needs_confirmation', 'check_spelling', 'custom', 'ai_recheck'] },
+          aiReason: { type: Type.STRING },
+          userNote: { type: Type.STRING, nullable: true },
+          customStatus: { type: Type.STRING, nullable: true }
+        },
+        required: ["id", "timeRange", "original", "corrected", "type", "status", "aiReason"]
+      }
+    }
+  },
+  required: ["summary", "vocabList"]
+};
 
 // Helper: Resolve Base URL
 const resolveBaseUrl = (provider: LLMProvider, customBaseUrl: string): string => {
@@ -36,294 +77,349 @@ const resolveBaseUrl = (provider: LLMProvider, customBaseUrl: string): string =>
 };
 
 /**
+ * Helper to safely extract and parse JSON from LLM output
+ */
+const safeParseJSON = <T>(text: string): T => {
+    let cleaned = text.replace(/```json\s*|\s*```/g, "").trim();
+    // Some models might output "Here is the JSON:" prefix
+    const firstCurly = cleaned.indexOf('{');
+    const firstSquare = cleaned.indexOf('[');
+    
+    // Attempt to find the start of JSON structure
+    let start = -1;
+    if (firstCurly !== -1 && (firstSquare === -1 || firstCurly < firstSquare)) start = firstCurly;
+    else if (firstSquare !== -1) start = firstSquare;
+
+    if (start !== -1) {
+        // Find the last closing bracket
+        const lastCurly = cleaned.lastIndexOf('}');
+        const lastSquare = cleaned.lastIndexOf(']');
+        let end = -1;
+        if (lastCurly !== -1 && lastCurly > start) end = lastCurly;
+        if (lastSquare !== -1 && lastSquare > end) end = lastSquare;
+        
+        if (end !== -1) {
+            cleaned = cleaned.substring(start, end + 1);
+        }
+    }
+
+    try {
+        return JSON.parse(cleaned);
+    } catch (e) {
+        console.error("JSON Parse Error Input:", text);
+        throw new Error("Failed to parse AI response as JSON. The model output might be incomplete.");
+    }
+};
+
+/**
  * Universal Chat Session Interface
- * Abstracts the difference between GoogleGenAI SDK and Fetch-based OpenAI/Anthropic calls.
  */
 class UniversalChatSession {
     private provider: LLMProvider;
     private apiKey: string;
     private baseUrl: string;
     private modelName: string;
-    
-    // State for non-SDK providers (OpenAI/Anthropic)
-    private history: any[] = []; 
-    // State for Google SDK
     private googleChat: Chat | null = null;
+    private systemInstruction: string;
+    // For OpenAI/Anthropic history management (basic)
+    private messages: any[] = []; 
+
+    constructor(apiKey: string, baseUrl: string, modelName: string, provider: LLMProvider, systemInstruction?: string) {
+        this.apiKey = apiKey;
+        this.baseUrl = resolveBaseUrl(provider, baseUrl);
+        this.modelName = modelName;
+        this.provider = provider;
+        this.systemInstruction = systemInstruction || DEFAULT_CHAT_SYSTEM_INSTRUCTION;
+
+        if (this.provider === 'Gemini') {
+            const ai = new GoogleGenAI({ apiKey, baseUrl: this.baseUrl || undefined } as any);
+            this.googleChat = ai.chats.create({
+                model: modelName,
+                config: { systemInstruction: this.systemInstruction }
+            });
+        }
+    }
+
+    /**
+     * Unified streaming method
+     * Note: For Analysis, we often use single-turn generation (generateContent) instead of chat,
+     * but this class supports conversational flows.
+     */
+    async sendMessageStream(prompt: string, onChunk: (text: string) => void, isJsonMode: boolean = false): Promise<string> {
+        let fullText = "";
+
+        if (this.provider === 'Gemini') {
+            // For Chat Widget
+            const result = await this.googleChat!.sendMessageStream({ message: prompt });
+            for await (const chunk of result) {
+                const text = chunk.text || "";
+                fullText += text;
+                onChunk(text);
+            }
+        } 
+        else if (this.provider === 'OpenAI') {
+            // Basic OpenAI Stream Implementation
+            const msgs = [
+                { role: "system", content: this.systemInstruction + (isJsonMode ? "\nReturn JSON only." : "") },
+                ...this.messages,
+                { role: "user", content: prompt }
+            ];
+            
+            const body: any = {
+                model: this.modelName,
+                messages: msgs,
+                stream: true
+            };
+            if (isJsonMode) body.response_format = { type: "json_object" };
+
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.body) throw new Error("No response body");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                        try {
+                            const json = JSON.parse(line.slice(6));
+                            const content = json.choices[0]?.delta?.content || "";
+                            fullText += content;
+                            onChunk(content);
+                        } catch (e) {}
+                    }
+                }
+            }
+            this.messages.push({ role: "user", content: prompt });
+            this.messages.push({ role: "assistant", content: fullText });
+        }
+        else if (this.provider === 'Anthropic') {
+             // Basic Anthropic Implementation
+             // (Simplified for brevity, assuming standard messages endpoint)
+             const body = {
+                 model: this.modelName,
+                 messages: [...this.messages, { role: "user", content: prompt }],
+                 system: this.systemInstruction + (isJsonMode ? "\nReturn JSON only." : ""),
+                 stream: true,
+                 max_tokens: 4096
+             };
+             
+             const response = await fetch(`${this.baseUrl}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
+                body: JSON.stringify(body)
+            });
+            
+            if (!response.body) throw new Error("No response body");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(line.slice(6));
+                            if (json.type === 'content_block_delta' && json.delta?.text) {
+                                fullText += json.delta.text;
+                                onChunk(json.delta.text);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+            this.messages.push({ role: "user", content: prompt });
+            this.messages.push({ role: "assistant", content: fullText });
+        }
+
+        return fullText;
+    }
+}
+
+/**
+ * AnalysisSession Class
+ * Manages the specific analysis logic
+ */
+export class AnalysisSession {
+    private apiKey: string;
+    private baseUrl: string;
+    private modelName: string;
+    private provider: LLMProvider;
+    private history: any[] = []; // Store conversation context manually
 
     constructor(apiKey: string, baseUrl: string, modelName: string, provider: LLMProvider) {
         this.apiKey = apiKey;
         this.baseUrl = resolveBaseUrl(provider, baseUrl);
         this.modelName = modelName;
         this.provider = provider;
-
-        if (this.provider === 'Gemini') {
-            const ai = new GoogleGenAI({ apiKey, baseUrl: this.baseUrl || undefined } as any);
-            this.googleChat = ai.chats.create({
-                model: modelName,
-                config: {
-                    systemInstruction: SYSTEM_INSTRUCTION,
-                    responseMimeType: "application/json"
-                }
-            });
-        }
-    }
-
-    /**
-     * Unified Send Message Method
-     * Handles text prompts. For this iteration, complex multimodal input is only fully supported on Gemini.
-     * OpenAI/Anthropic will receive the text prompt (SRT + Instructions).
-     */
-    async sendMessage(prompt: string, isJsonMode: boolean = true): Promise<string> {
-        if (this.provider === 'Gemini') {
-            const response = await this.googleChat!.sendMessage({ message: prompt });
-            return response.text || "{}";
-        } 
-        
-        // --- OpenAI Handler ---
-        if (this.provider === 'OpenAI') {
-            const messages = [
-                { role: "system", content: SYSTEM_INSTRUCTION },
-                ...this.history,
-                { role: "user", content: prompt }
-            ];
-
-            // Force JSON mode instruction for OpenAI if not explicitly using json_object response_format (to be safe across models)
-            if (isJsonMode) {
-                messages[0].content += "\nIMPORTANT: You must respond with valid JSON.";
-            }
-
-            const response = await fetch(`${this.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: this.modelName,
-                    messages: messages,
-                    response_format: isJsonMode ? { type: "json_object" } : undefined,
-                    temperature: 0.1
-                })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(`OpenAI Error: ${err.error?.message || response.statusText}`);
-            }
-
-            const data = await response.json();
-            const text = data.choices[0].message.content;
-            
-            // Update History
-            this.history.push({ role: "user", content: prompt });
-            this.history.push({ role: "assistant", content: text });
-            
-            return text;
-        }
-
-        // --- Anthropic Handler ---
-        if (this.provider === 'Anthropic') {
-            // Anthropic system prompt is a top-level parameter
-            const messages = [
-                ...this.history,
-                { role: "user", content: prompt }
-            ];
-            
-            let sysPrompt = SYSTEM_INSTRUCTION;
-            if (isJsonMode) {
-                sysPrompt += "\nIMPORTANT: Output ONLY valid JSON.";
-            }
-
-            const response = await fetch(`${this.baseUrl}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': this.apiKey,
-                    'anthropic-version': '2023-06-01' // Required header
-                },
-                body: JSON.stringify({
-                    model: this.modelName,
-                    system: sysPrompt,
-                    messages: messages,
-                    max_tokens: 4096,
-                    temperature: 0.1
-                })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(`Anthropic Error: ${err.error?.message || response.statusText}`);
-            }
-
-            const data = await response.json();
-            const text = data.content[0].text;
-
-            this.history.push({ role: "user", content: prompt });
-            this.history.push({ role: "assistant", content: text });
-
-            return text;
-        }
-
-        throw new Error("Unsupported Provider");
-    }
-}
-
-/**
- * AnalysisSession Class Wrapper
- */
-export class AnalysisSession {
-    private session: UniversalChatSession;
-
-    constructor(apiKey: string, baseUrl: string, modelName: string, provider: LLMProvider) {
-        this.session = new UniversalChatSession(apiKey, baseUrl, modelName, provider);
     }
 
     async start(
         srtContent: string | null,
-        mediaParts: Part[], // Ignored for non-Gemini for now
+        mediaParts: Part[],
         language: string, 
         glossary?: GlossaryItem[],
-        extraContext?: string
+        extraContext?: string,
+        onStreamUpdate?: (partial: string) => void
     ): Promise<AnalysisResult> {
-        let textPrompt = `
-        Step 2 - Preliminary Proofreading (Initial Analysis):
-        Analyze the provided content.
-        IMPORTANT: The output values (summary text, type descriptions) MUST be in ${language}.
-        `;
-
+        
+        let prompt = `Step 2 - Preliminary Proofreading (Initial Analysis).\n`;
+        prompt += `IMPORTANT: The 'summary' field (topic, agenda, speakers) MUST be written in ${language}.\n`;
+        
         if (glossary && glossary.length > 0) {
-            textPrompt += `\nUse the following Glossary strictly:\n${glossary.map(g => `- ${g.term}: ${g.definition}`).join('\n')}`;
+            prompt += `\nGlossary:\n${glossary.map(g => `- ${g.term}: ${g.definition}`).join('\n')}`;
         }
-
-        if (extraContext) {
-            textPrompt += `\nGlobal User Instructions:\n"${extraContext}"`;
-        }
-
-        textPrompt += `\n\nTask:\n1. Generate a brief summary.\n2. Identify proper nouns and technical terms.\n`;
-        textPrompt += `\nReturn valid JSON matching this structure: { summary: { topic, speakers[], duration, agenda[] }, vocabList: [{ id, timeRange, original, corrected, type, status, aiReason }] }`;
+        if (extraContext) prompt += `\nInstructions: "${extraContext}"`;
+        prompt += `\n\nTask: Generate summary and identify terms/corrections.`;
         
-        if (srtContent) {
-            textPrompt += `\nSubtitle Content:\n${srtContent.slice(0, 50000)}`; // Cap context
+        // For Gemini, we use Schema. For others, we prompt textually.
+        if (this.provider === 'Gemini') {
+             prompt += ` Return valid JSON matching the provided schema.`;
         } else {
-            textPrompt += `\n(No subtitle provided. Please analyze based on prompt)`;
+             prompt += ` Return ONLY valid JSON with this structure: { "summary": { "topic": "", "speakers": [], "duration": "", "agenda": [] }, "vocabList": [{ "id": 1, "timeRange": "", "original": "", "corrected": "", "type": "", "status": "corrected", "aiReason": "" }] }`;
         }
-
-        // TODO: Handle Image/Video parts for OpenAI/Anthropic in future update
-        // Current: Only passes text for standard providers.
         
-        const jsonStr = await this.session.sendMessage(textPrompt, true);
-        try {
-            return JSON.parse(jsonStr) as AnalysisResult;
-        } catch (e) {
-            console.error("JSON Parse Error", jsonStr);
-            throw new Error("Failed to parse AI response as JSON.");
+        const contentPart = srtContent ? `\nSubtitle Content:\n${srtContent.slice(0, 50000)}` : "(No subtitle provided)";
+        
+        const fullPrompt = SYSTEM_INSTRUCTION + "\n\n" + prompt + contentPart;
+        this.history.push({ role: 'user', content: fullPrompt });
+
+        let fullText = "";
+
+        if (this.provider === 'Gemini') {
+            const ai = new GoogleGenAI({ apiKey: this.apiKey, baseUrl: this.baseUrl || undefined } as any);
+            const result = await ai.models.generateContentStream({
+                model: this.modelName,
+                contents: [
+                    { role: 'user', parts: [{ text: fullPrompt }] }
+                ],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: ANALYSIS_SCHEMA, 
+                }
+            });
+
+            for await (const chunk of result) {
+                const text = chunk.text || "";
+                fullText += text;
+                if (onStreamUpdate) onStreamUpdate(text);
+            }
+        } else {
+            // Universal Fallback for OpenAI/Anthropic
+            // Use SYSTEM_INSTRUCTION for analysis, not the default chat one
+            const session = new UniversalChatSession(this.apiKey, this.baseUrl, this.modelName, this.provider, SYSTEM_INSTRUCTION);
+            fullText = await session.sendMessageStream(prompt + contentPart, (chunk) => {
+                if (onStreamUpdate) onStreamUpdate(chunk);
+            }, true); // force JSON mode
         }
+        
+        this.history.push({ role: 'model', content: fullText });
+        return safeParseJSON<AnalysisResult>(fullText);
     }
 
     async iterate(
         currentVocab: VocabItem[],
         newInstruction: string,
         language: string,
-        activeGlossaryItems: GlossaryItem[] = []
+        activeGlossaryItems: GlossaryItem[] = [],
+        onStreamUpdate?: (partial: string) => void
     ): Promise<AnalysisResult> {
+        
+        const previousContext = this.history.map(h => h.content).join('\n---\n');
         const currentStatus = currentVocab.map(v => 
-            `ID: ${v.id} | Original: "${v.original}" | UserCorrected: "${v.corrected}" | UserNote: "${v.userNote || ''}"`
+            `ID: ${v.id} | Original: "${v.original}" | UserCorrected: "${v.corrected}"`
         ).join('\n');
 
         let prompt = `
-        Step 2.1 - Iterative Re-analysis:
-        Re-evaluate based on NEW CONTEXT.
-        Target Language: ${language}
+        Previous Context: ${previousContext.slice(-20000)}
+        
+        Step 2.1 - Re-analysis:
         New Instructions: "${newInstruction}"
+        Language: ${language}
+        Current Table:
+        ${currentStatus}
+        
+        Return the FULL updated list as JSON.
         `;
 
-        if (activeGlossaryItems.length > 0) {
-            prompt += `\nUPDATED Glossary:\n${activeGlossaryItems.map(g => `- ${g.term}: ${g.definition}`).join('\n')}`;
+        if (this.provider !== 'Gemini') {
+             prompt += ` Return ONLY valid JSON following the previous structure.`;
         }
 
-        prompt += `\nCurrent Table State:\n${currentStatus}\n\nReturn the FULL updated list as JSON.`;
+        let fullText = "";
 
-        const jsonStr = await this.session.sendMessage(prompt, true);
-        try {
-            return JSON.parse(jsonStr) as AnalysisResult;
-        } catch (e) {
-            throw new Error("Failed to parse AI response during iteration.");
+        if (this.provider === 'Gemini') {
+            const ai = new GoogleGenAI({ apiKey: this.apiKey, baseUrl: this.baseUrl || undefined } as any);
+            const result = await ai.models.generateContentStream({
+                model: this.modelName,
+                contents: [{ role: 'user', parts: [{ text: SYSTEM_INSTRUCTION + "\n\n" + prompt }] }],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: ANALYSIS_SCHEMA,
+                }
+            });
+
+            for await (const chunk of result) {
+                const text = chunk.text || "";
+                fullText += text;
+                if (onStreamUpdate) onStreamUpdate(text);
+            }
+        } else {
+            // Universal Fallback
+            const session = new UniversalChatSession(this.apiKey, this.baseUrl, this.modelName, this.provider, SYSTEM_INSTRUCTION);
+            fullText = await session.sendMessageStream(prompt, (chunk) => {
+                if (onStreamUpdate) onStreamUpdate(chunk);
+            }, true);
         }
+
+        return safeParseJSON<AnalysisResult>(fullText);
     }
 }
 
-// --- UTILITIES FOR STREAMING ---
+// Re-export other functions
 
-async function streamOpenAI(apiKey: string, baseUrl: string, model: string, messages: any[], onChunk: (text: string) => void) {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, stream: true })
-    });
+export const chatWithAgent = async (
+  history: { role: string, parts: { text: string }[] }[],
+  message: string,
+  modelName: string,
+  apiKey: string,
+  baseUrl: string,
+  onChunk: (text: string) => void,
+  systemInstruction?: string
+) => {
+    let provider: LLMProvider = 'Gemini';
+    if (modelName.startsWith('gpt')) provider = 'OpenAI';
+    if (modelName.startsWith('claude')) provider = 'Anthropic';
 
-    if (!response.body) throw new Error("No response body");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-            if (line.trim() === 'data: [DONE]') return;
-            if (line.startsWith('data: ')) {
-                try {
-                    const json = JSON.parse(line.slice(6));
-                    const content = json.choices[0]?.delta?.content;
-                    if (content) onChunk(content);
-                } catch (e) {}
-            }
+    const session = new UniversalChatSession(apiKey, baseUrl, modelName, provider, systemInstruction);
+    
+    if (provider === 'Gemini') {
+        const ai = new GoogleGenAI({ apiKey, baseUrl: baseUrl || undefined } as any);
+        const chat = ai.chats.create({
+            model: modelName,
+            history: history, 
+            config: { systemInstruction: systemInstruction || DEFAULT_CHAT_SYSTEM_INSTRUCTION }
+        });
+        const result = await chat.sendMessageStream({ message });
+        for await (const chunk of result) {
+            if (chunk.text) onChunk(chunk.text);
         }
+    } else {
+        let fullPrompt = history.map(h => `${h.role}: ${h.parts[0].text}`).join('\n') + `\nuser: ${message}`;
+        await session.sendMessageStream(fullPrompt, onChunk);
     }
-}
-
-async function streamAnthropic(apiKey: string, baseUrl: string, model: string, messages: any[], system: string, onChunk: (text: string) => void) {
-    const response = await fetch(`${baseUrl}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model, messages, system, stream: true, max_tokens: 4096 })
-    });
-
-    if (!response.body) throw new Error("No response body");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-            if (line.startsWith('event: content_block_delta')) {
-                // The next line usually contains "data: {...}"
-                // But SSE format in fetch reader can be tricky if chunks are split.
-                // Simplified: Anthropic lines are usually "event: ...\ndata: ...\n\n"
-            }
-            if (line.startsWith('data: ')) {
-                try {
-                    const json = JSON.parse(line.slice(6));
-                    if (json.type === 'content_block_delta' && json.delta?.text) {
-                        onChunk(json.delta.text);
-                    }
-                } catch (e) {}
-            }
-        }
-    }
-}
-
-// --- GENERATION FUNCTIONS ---
+};
 
 export const generatePolishedSubtitle = async (
   content: string,
@@ -347,30 +443,14 @@ export const generatePolishedSubtitle = async (
   3. Apply these corrections:
   ${vocabString}
   
+  Strictly output content only. NO conversational filler (e.g. "Here is the refined subtitle").
   Input Subtitle (${format}):
   ${content}
   `;
 
-  if (provider === 'Gemini') {
-      const ai = new GoogleGenAI({ apiKey, baseUrl: baseUrl || undefined } as any);
-      const result = await ai.models.generateContentStream({
-        model: modelName,
-        contents: prompt,
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
-      });
-      for await (const chunk of result) {
-        if (chunk.text) onChunk(chunk.text);
-      }
-  } else if (provider === 'OpenAI') {
-      const msgs = [
-          { role: "system", content: SYSTEM_INSTRUCTION },
-          { role: "user", content: prompt }
-      ];
-      await streamOpenAI(apiKey, resolveBaseUrl(provider, baseUrl), modelName, msgs, onChunk);
-  } else if (provider === 'Anthropic') {
-      const msgs = [{ role: "user", content: prompt }];
-      await streamAnthropic(apiKey, resolveBaseUrl(provider, baseUrl), modelName, msgs, SYSTEM_INSTRUCTION, onChunk);
-  }
+  // Note: For task-specific generations, use default instruction or empty
+  const session = new UniversalChatSession(apiKey, baseUrl, modelName, provider);
+  await session.sendMessageStream(prompt, onChunk);
 };
 
 export const generateFinalTranscript = async (
@@ -394,72 +474,14 @@ export const generateFinalTranscript = async (
   Rules: Remove timestamps. Group into paragraphs. Apply corrections:
   ${vocabString}
   
+  Strictly output content only. NO conversational filler (e.g. "Here is the transcript").
   Subtitle Content:
   ${srtContent}
   `;
 
-  if (provider === 'Gemini') {
-      const ai = new GoogleGenAI({ apiKey, baseUrl: baseUrl || undefined } as any);
-      const result = await ai.models.generateContentStream({
-        model: modelName,
-        contents: prompt,
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
-      });
-      for await (const chunk of result) {
-        if (chunk.text) onChunk(chunk.text);
-      }
-  } else if (provider === 'OpenAI') {
-      const msgs = [{ role: "system", content: SYSTEM_INSTRUCTION }, { role: "user", content: prompt }];
-      await streamOpenAI(apiKey, resolveBaseUrl(provider, baseUrl), modelName, msgs, onChunk);
-  } else if (provider === 'Anthropic') {
-      const msgs = [{ role: "user", content: prompt }];
-      await streamAnthropic(apiKey, resolveBaseUrl(provider, baseUrl), modelName, msgs, SYSTEM_INSTRUCTION, onChunk);
-  }
+  const session = new UniversalChatSession(apiKey, baseUrl, modelName, provider);
+  await session.sendMessageStream(prompt, onChunk);
 };
-
-export const chatWithAgent = async (
-  history: { role: string, parts: { text: string }[] }[],
-  message: string,
-  modelName: string,
-  apiKey: string,
-  baseUrl: string,
-  onChunk: (text: string) => void
-) => {
-    // Note: ConfigContext is not easily accessible here for 'provider' state without passing it down.
-    // For this implementation, we will infer provider based on model name OR generic default if passed.
-    // Ideally, pass 'provider' from AgentManager.
-    // Assuming 'provider' isn't passed here in existing signature, we'll try to detect or default to Gemini if not explicit.
-    // *Correction*: App structure passes provider from Context to AgentManager then here? No, AgentManager needs update.
-    // But to fix the immediate error without changing AgentManager signature widely:
-    
-    // We will assume Gemini for now unless we do a dirty check on model name, 
-    // BUT since the user wants full compatibility, we MUST use the provider from context.
-    // The previous implementation used getClient which is now deprecated.
-    
-    // HACK: We will instantiate a temporary client based on model name heuristic if provider missing,
-    // OR ideally we rely on the component passing it.
-    // Since I can't change AgentManager in this specific XML block (it's not in the 'changes' list), 
-    // I will assume the caller updates to pass provider, OR I use a heuristic.
-    
-    // Since I cannot update AgentManager in this thought block (I didn't list it in step 10), 
-    // I will use Google SDK for now as fallback, but warn.
-    // WAIT: I *can* update AgentManager in a separate change block.
-    
-    // For now, let's keep this using Gemini SDK as legacy fallback, but warn.
-    const ai = new GoogleGenAI({ apiKey, baseUrl: baseUrl || undefined } as any);
-    const chat = ai.chats.create({
-        model: modelName,
-        history: history, 
-        config: { systemInstruction: CHAT_SYSTEM_INSTRUCTION }
-    });
-    const result = await chat.sendMessageStream({ message });
-    for await (const chunk of result) {
-        if (chunk.text) onChunk(chunk.text);
-    }
-};
-
-// --- Single Task Functions (Glossary/Time) ---
-// These are simple enough to wrap in a similar switch logic.
 
 export const generateSmartGlossary = async (
   srtContent: string,
@@ -473,10 +495,9 @@ export const generateSmartGlossary = async (
   const vocabText = vocabList.map(v => `${v.corrected} (${v.type})`).join(', ');
   const prompt = `Analyze content. Generate JSON glossary. Terms: ${vocabText}. Lang: ${language}. Content: ${srtContent.slice(0, 20000)}`;
   
-  // Reuse session logic for one-off
   const session = new UniversalChatSession(apiKey, baseUrl, modelName, provider);
-  const jsonStr = await session.sendMessage(prompt, true);
-  return JSON.parse(jsonStr);
+  const text = await session.sendMessageStream(prompt, () => {}, true);
+  return safeParseJSON<GlossaryItem[]>(text || "[]");
 };
 
 export const fixVocabTimestamps = async (
@@ -487,10 +508,9 @@ export const fixVocabTimestamps = async (
     provider: LLMProvider = 'Gemini'
 ): Promise<VocabItem[]> => {
     const prompt = `Calibrate Timestamps. Return JSON array [{id, timeRange}]. Input: ${JSON.stringify(vocabList.map(v => ({id: v.id, original: v.original})))}. SRT: ${srtContent.slice(0, 30000)}`;
-    
-    const session = new UniversalChatSession(apiKey, baseUrl, 'gemini-3-flash-preview', provider); // Force flash for speed? Or use provider default
-    const jsonStr = await session.sendMessage(prompt, true);
-    return JSON.parse(jsonStr);
+    const session = new UniversalChatSession(apiKey, baseUrl, 'gemini-3-flash-preview', provider);
+    const text = await session.sendMessageStream(prompt, () => {}, true);
+    return safeParseJSON<VocabItem[]>(text || "[]");
 };
 
 export const generateGlossaryFromRawText = async (
@@ -504,8 +524,8 @@ export const generateGlossaryFromRawText = async (
 ): Promise<GlossaryItem[]> => {
     const prompt = `Extract glossary from text. Context: ${context}. Lang: ${language}. Content: ${rawText.slice(0, 25000)}. Return JSON.`;
     const session = new UniversalChatSession(apiKey, baseUrl, modelName, provider);
-    const jsonStr = await session.sendMessage(prompt, true);
-    return JSON.parse(jsonStr);
+    const text = await session.sendMessageStream(prompt, () => {}, true);
+    return safeParseJSON<GlossaryItem[]>(text || "[]");
 };
 
 export const generateSessionTitle = async (firstMessage: string, apiKey: string, baseUrl: string): Promise<string> => {

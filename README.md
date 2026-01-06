@@ -32,19 +32,20 @@ Unlike cloud-based SaaS platforms, **VerbaFlow runs entirely in your browser**. 
 *   **Context-Aware**: The AI understands the context of the entire video/audio to make accurate corrections.
 *   **Media Sync**: Click any subtitle line or term to instantly jump to that timestamp in the video/audio player.
 
-### 3. 📚 Knowledge Base (Glossary)
+### 3. 💬 AI Assistant (Copilot)
+*   **Drag-and-Drop Interface**: A floating, resizable chat window that can be moved anywhere on screen.
+*   **Contextual Help**: Ask the assistant to check consistency, explain specific technical terms, or polish selected text segments.
+*   **Session Management**: Save and manage multiple conversation histories directly in the sidebar.
+
+### 4. 📚 Knowledge Base (Glossary)
 *   **Smart Extraction**: Automatically extract proper nouns, technical terms, and entities from your content.
 *   **Consistency Loop**: Extracted terms are saved to Glossary Sets, which are then fed back into the AI for future analysis, ensuring strict terminology consistency across projects.
 *   **Import/Export**: Support for JSON, CSV, and text format migration.
 
-### 4. 🔒 Privacy & Local-First
+### 5. 🔒 Privacy & Local-First
 *   **IndexedDB Storage**: All projects, transcripts, and chat history are stored in your browser's local database (`Dexie.js`).
 *   **No Backend**: We do not have a server. Your API Keys are saved in `LocalStorage` and sent directly to the LLM providers.
-*   **Data Ownership**: You own your data. Export projects as `.vfproj` files for backup or sharing.
-
-### 5. 📤 Production-Ready Output
-*   **Polished SRT**: Generates corrected subtitle files while **strictly maintaining original timestamps** and formatting.
-*   **Markdown Transcript**: Converts subtitles into readable articles/blogs with speaker separation.
+*   **Data Management**: A dedicated dashboard to view storage usage and clear cache/history.
 
 ## 🚀 Getting Started
 

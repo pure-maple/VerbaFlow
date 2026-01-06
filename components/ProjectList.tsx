@@ -224,6 +224,8 @@ const ProjectList: React.FC<Props> = ({ onOpenProject, onCreateProject, onShowTo
             message=""
             initialValue={renameTarget?.name || ""}
             placeholder="Project Name"
+            confirmText={t.common.confirm}
+            cancelText={t.common.cancel}
         />
 
         <InputModal 
@@ -234,6 +236,8 @@ const ProjectList: React.FC<Props> = ({ onOpenProject, onCreateProject, onShowTo
             message=""
             initialValue={t.projects.untitled}
             placeholder="Project Name"
+            confirmText={t.common.confirm}
+            cancelText={t.common.cancel}
         />
 
         <input 

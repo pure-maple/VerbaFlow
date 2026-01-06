@@ -10,6 +10,7 @@ interface ConfigState {
   driveClientId: string;
   driveApiKey: string;
   manualDriveToken: string;
+  agentSystemInstruction: string;
 }
 
 interface ConfigContextType extends ConfigState {
@@ -28,6 +29,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     driveClientId: '',
     driveApiKey: '',
     manualDriveToken: '',
+    agentSystemInstruction: '',
   });
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, FileText, Video, Music, AlertCircle, Loader2, Link, File, Folder, FolderOpen, ChevronRight, Home, ArrowLeft, Filter, RefreshCw, KeyRound } from 'lucide-react';
 import { listDriveFiles, extractDriveFileId, requestDriveRelogin } from '../services/googleDriveService';
 import { ConfirmationModal } from './ConfirmationModal';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Props {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, title, category }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'browse' | 'link'>('browse');
   const [files, setFiles] = useState<Array<any>>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -122,9 +124,10 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
         isOpen={isReAuthConfirmOpen}
         onClose={() => setIsReAuthConfirmOpen(false)}
         onConfirm={handleReAuthConfirm}
-        title="Google Drive Re-Authorization"
-        message="This will open the Google Auth window again. Please ensure you check the box for 'See and download all your Google Drive files' to fix the permission issue."
-        confirmText="Proceed to Auth"
+        title={t.driveSelector.reAuthTitle}
+        message={t.driveSelector.reAuthMessage}
+        confirmText={t.common.confirm}
+        cancelText={t.common.cancel}
       />
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col h-[85vh]">
@@ -146,13 +149,13 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                 onClick={() => setActiveTab('browse')}
                 className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'browse' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
             >
-                <Search size={16} /> Browse
+                <Search size={16} /> {t.driveSelector.browse}
             </button>
             <button 
                 onClick={() => setActiveTab('link')}
                 className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors flex items-center justify-center gap-2 ${activeTab === 'link' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
             >
-                <Link size={16} /> Paste Link
+                <Link size={16} /> {t.driveSelector.pasteLink}
             </button>
         </div>
 
@@ -167,7 +170,7 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                             <input 
                                 className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
-                                placeholder="Search all files..."
+                                placeholder={t.driveSelector.searchPlaceholder}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                             />
@@ -199,10 +202,10 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                                 onChange={(e) => setCurrentFilter(e.target.value as any)}
                                 className="bg-transparent text-slate-500 text-xs font-medium focus:outline-none cursor-pointer hover:text-slate-800 dark:hover:text-slate-200"
                             >
-                                <option value="video">Filter: Videos</option>
-                                <option value="audio">Filter: Audio</option>
-                                <option value="srt">Filter: Subtitles</option>
-                                <option value="all">Filter: All Files</option>
+                                <option value="video">{t.driveSelector.filterVideos}</option>
+                                <option value="audio">{t.driveSelector.filterAudio}</option>
+                                <option value="srt">{t.driveSelector.filterSubtitles}</option>
+                                <option value="all">{t.driveSelector.filterAll}</option>
                             </select>
                         </div>
                     </div>
@@ -212,16 +215,16 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center h-full gap-3 opacity-60">
                                 <Loader2 className="animate-spin text-indigo-600" size={32} />
-                                <p className="text-slate-500 text-sm">Loading...</p>
+                                <p className="text-slate-500 text-sm">{t.driveSelector.loading}</p>
                             </div>
                         ) : error ? (
                             <div className="flex flex-col items-center justify-center h-full gap-3 text-center p-8">
                                 <AlertCircle className="text-red-500" size={32} />
-                                <p className="text-slate-800 dark:text-slate-200 font-medium">Access Error</p>
+                                <p className="text-slate-800 dark:text-slate-200 font-medium">{t.driveSelector.accessError}</p>
                                 <p className="text-slate-500 text-xs max-w-xs mb-4 font-mono bg-red-50 dark:bg-red-900/20 p-2 rounded">{error}</p>
                                 <div className="flex gap-2">
-                                    <button onClick={() => fetchFiles(currentFolderId, searchTerm)} className="text-xs flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50"><RefreshCw size={12}/> Retry</button>
-                                    <button onClick={() => setIsReAuthConfirmOpen(true)} className="text-xs flex items-center gap-1 bg-indigo-600 text-white border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700"><KeyRound size={12}/> Re-Authorize</button>
+                                    <button onClick={() => fetchFiles(currentFolderId, searchTerm)} className="text-xs flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50"><RefreshCw size={12}/> {t.common.retry}</button>
+                                    <button onClick={() => setIsReAuthConfirmOpen(true)} className="text-xs flex items-center gap-1 bg-indigo-600 text-white border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700"><KeyRound size={12}/> {t.driveSelector.fixPermissions}</button>
                                 </div>
                             </div>
                         ) : files.length === 0 ? (
@@ -230,19 +233,19 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                                     <Folder className="text-slate-300 dark:text-slate-600" size={48} />
                                 </div>
                                 <div>
-                                    <p className="text-slate-600 dark:text-slate-300 font-medium">{searchTerm ? "No results found" : "Empty Folder"}</p>
+                                    <p className="text-slate-600 dark:text-slate-300 font-medium">{searchTerm ? t.driveSelector.noResults : t.driveSelector.emptyFolder}</p>
                                     <div className="text-slate-400 text-xs mt-2 max-w-xs mx-auto space-y-2">
                                         <p>{searchTerm ? `No files matching "${searchTerm}".` : `No files in this view.`}</p>
                                         
                                         {/* DIAGNOSTIC / FIX UI */}
                                         <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800/30 text-amber-800 dark:text-amber-200 text-left">
-                                            <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={10} /> Potential Scope Issue</p>
-                                            <p className="opacity-90">Can't see your files? You may have limited the app's access permissions.</p>
+                                            <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={10} /> {t.driveSelector.scopeIssue}</p>
+                                            <p className="opacity-90">{t.driveSelector.scopeIssueDesc}</p>
                                             <button 
                                                 onClick={() => setIsReAuthConfirmOpen(true)}
                                                 className="mt-2 w-full py-1.5 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 rounded text-xs font-semibold shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/40"
                                             >
-                                                Fix Permissions (Re-login)
+                                                {t.driveSelector.fixPermissions}
                                             </button>
                                         </div>
                                     </div>
@@ -279,13 +282,13 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
             ) : (
                 <div className="flex flex-col gap-4 p-6">
                     <p className="text-sm text-slate-600 dark:text-slate-300">
-                        Paste a Google Drive sharing link or file ID directly. 
+                        {t.driveSelector.manualInstruction}
                         <br/>
                         <span className="text-xs text-slate-400">(Right click file in Drive &gt; Share &gt; Copy Link)</span>
                     </p>
                     <textarea 
                         className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm resize-none"
-                        placeholder="https://drive.google.com/file/d/..."
+                        placeholder={t.driveSelector.manualPlaceholder}
                         rows={4}
                         value={linkInput}
                         onChange={e => setLinkInput(e.target.value)}
@@ -293,7 +296,7 @@ export const DriveSelectorModal: React.FC<Props> = ({ isOpen, onClose, onConfirm
                     {error && <p className="text-red-500 text-sm flex items-center gap-1"><AlertCircle size={14} /> {error}</p>}
                     <div className="flex justify-end">
                         <button onClick={handleManualSubmit} disabled={!linkInput} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                            Load File
+                            {t.driveSelector.loadFile}
                         </button>
                     </div>
                 </div>

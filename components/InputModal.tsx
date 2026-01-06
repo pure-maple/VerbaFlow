@@ -10,9 +10,21 @@ interface Props {
   message: string;
   placeholder?: string;
   initialValue?: string;
+  confirmText?: string;
+  cancelText?: string;
 }
 
-export const InputModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, title, message, placeholder, initialValue = '' }) => {
+export const InputModal: React.FC<Props> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  placeholder, 
+  initialValue = '',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel'
+}) => {
   const [value, setValue] = useState(initialValue);
 
   useEffect(() => {
@@ -31,7 +43,7 @@ export const InputModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, title,
         <div className="p-6">
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 whitespace-pre-wrap">{message}</p>
           <input
-            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg dark:bg-slate-950 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
+            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
             placeholder={placeholder}
             value={value}
             onChange={e => setValue(e.target.value)}
@@ -44,13 +56,13 @@ export const InputModal: React.FC<Props> = ({ isOpen, onClose, onConfirm, title,
             autoFocus
           />
           <div className="flex justify-end gap-2 mt-6">
-            <button onClick={onClose} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-sm">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-sm">{cancelText}</button>
             <button
                 onClick={() => { onConfirm(value); onClose(); }}
                 disabled={!value.trim()}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
             >
-                Confirm
+                {confirmText}
             </button>
           </div>
         </div>

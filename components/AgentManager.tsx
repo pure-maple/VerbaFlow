@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useConfig } from '../contexts/ConfigContext';
@@ -10,7 +11,7 @@ import ReactMarkdown from 'react-markdown';
 
 const AgentManager: React.FC = () => {
   const { t } = useLanguage();
-  const { llmApiKey, llmBaseUrl } = useConfig();
+  const { llmApiKey, llmBaseUrl, agentSystemInstruction } = useConfig();
   
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -143,20 +144,28 @@ const AgentManager: React.FC = () => {
           }));
 
           let fullRes = "";
-          await chatWithAgent(currentHistory, userMsg.content, activeSession!.model, llmApiKey, llmBaseUrl, (chunk) => {
-              fullRes += chunk;
-              setSessions(prev => prev.map(s => {
-                  if (s.id !== activeSessionId) return s;
-                  const msgs = [...s.messages];
-                  const last = msgs[msgs.length - 1];
-                  if (last.role === 'model' && last.id === 'streaming') {
-                      last.content = fullRes;
-                      return { ...s, messages: msgs };
-                  } else {
-                      return { ...s, messages: [...msgs, { id: 'streaming', role: 'model', content: fullRes, timestamp: Date.now() }] };
-                  }
-              }));
-          });
+          await chatWithAgent(
+              currentHistory, 
+              userMsg.content, 
+              activeSession!.model, 
+              llmApiKey, 
+              llmBaseUrl, 
+              (chunk: string) => {
+                  fullRes += chunk;
+                  setSessions(prev => prev.map(s => {
+                      if (s.id !== activeSessionId) return s;
+                      const msgs = [...s.messages];
+                      const last = msgs[msgs.length - 1];
+                      if (last.role === 'model' && last.id === 'streaming') {
+                          last.content = fullRes;
+                          return { ...s, messages: msgs };
+                      } else {
+                          return { ...s, messages: [...msgs, { id: 'streaming', role: 'model', content: fullRes, timestamp: Date.now() }] };
+                      }
+                  }));
+              },
+              agentSystemInstruction // Pass the custom instruction
+          );
 
           // Auto Rename if new
           if (activeSession!.messages.length === 0) {
@@ -178,8 +187,10 @@ const AgentManager: React.FC = () => {
           isOpen={!!deleteTargetId}
           onClose={() => setDeleteTargetId(null)}
           onConfirm={handleConfirmDelete}
-          title="Delete Chat"
-          message="Are you sure you want to delete this conversation? This action cannot be undone."
+          title={t.agents.deleteConfirmTitle}
+          message={t.agents.deleteConfirmMessage}
+          confirmText={t.common.delete}
+          cancelText={t.common.cancel}
           isDanger={true}
       />
 
@@ -259,14 +270,14 @@ const AgentManager: React.FC = () => {
                           <button 
                               onClick={(e) => startRename(e, session)}
                               className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                              title="Rename"
+                              title={t.common.rename}
                           >
                               <Edit2 size={14} />
                           </button>
                           <button 
                               onClick={(e) => initiateDeleteSession(e, session.id)}
                               className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                              title="Delete"
+                              title={t.common.delete}
                           >
                               <Trash2 size={14} />
                           </button>
@@ -322,7 +333,11 @@ const AgentManager: React.FC = () => {
                                           components={{
                                               p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
                                               a: ({node, ...props}) => <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
-                                              code: ({node, ...props}) => <code className="bg-black/10 dark:bg-white/10 rounded px-1" {...props} />
+                                              code: ({node, className, children, ...props}: any) => (
+                                                  <code className={`${className || ''} bg-black/10 dark:bg-white/10 rounded px-1`} {...props}>
+                                                      {children}
+                                                  </code>
+                                              )
                                           }}
                                       >
                                           {msg.content}
@@ -375,7 +390,7 @@ const AgentManager: React.FC = () => {
                       <div className="flex justify-end mt-1 mr-1 max-w-4xl mx-auto">
                         <span className="text-[10px] text-slate-400 flex items-center gap-1">
                             {isMac ? <Command size={10} /> : <span className="font-bold text-[9px] border border-slate-300 dark:border-slate-600 rounded px-0.5">Ctrl</span>}
-                            <span>+ Enter to send</span>
+                            <span>+ {t.agents.pressEnter}</span>
                         </span>
                       </div>
                   </div>

@@ -13,17 +13,22 @@ export const translations = {
       rename: "Rename",
       save: "Save",
       processing: "Processing...",
-      unknownError: "Unknown error occurred"
+      unknownError: "Unknown error occurred",
+      retry: "Retry",
+      back: "Back",
+      default: "Default"
     },
     messages: {
-      projectCreated: "Project created successfully!",
-      projectCreateFailed: "Failed to create project.",
-      projectLoaded: "Project loaded.",
-      projectLoadFailed: "Failed to load project.",
-      deleteFailed: "Failed to delete project.",
-      reAnalysisComplete: "Re-analysis complete.",
-      reAnalysisFailed: "Re-analysis failed.",
-      workspaceReset: "Workspace reset to Step 1.",
+      projectCreated: "Project created successfully",
+      projectCreateFailed: "Failed to create project",
+      projectLoaded: "Project loaded",
+      projectLoadFailed: "Failed to load project",
+      deleteFailed: "Failed to delete project",
+      reAnalysisComplete: "Re-analysis complete",
+      reAnalysisFailed: "Re-analysis failed",
+      workspaceReset: "Workspace reset to Step 1",
+      restartConfirmTitle: "Reset Current Project",
+      restartConfirmMessage: "Are you sure you want to reset this project? All progress in Steps 2-4 will be lost.",
       exportLimited: "Backup is currently limited in multi-project mode.",
       importUpdating: "Import feature is being updated.",
       driveSaveDisabled: "Drive Save is temporarily disabled.",
@@ -31,28 +36,32 @@ export const translations = {
       generationFailed: "Generation failed.",
       extractSuccess: "Successfully extracted {n} terms!",
       extractFailed: "Extraction failed.",
-      noTermsFound: "No confirmed terms found.",
-      noTermsExtracted: "No terms extracted by AI.",
+      noTermsFound: "No confirmed terms found",
+      noTermsExtracted: "No terms extracted by AI",
       timestampsFixed: "Timestamps calibrated based on SRT.",
       timestampsFailed: "Failed to fix timestamps.",
       syntaxErrorRepaired: "Syntax error detected. Auto-repairing...",
       driveConfigMissing: "Google Drive not configured.",
-      copySuccess: "Copied to clipboard!",
-      sessionRenamed: "Session renamed.",
-      exportSuccess: "Project exported to JSON.",
-      importSuccess: "Project imported successfully!",
+      copySuccess: "Copied to clipboard",
+      sessionRenamed: "Session renamed",
+      exportSuccess: "Project exported to JSON",
+      importSuccess: "Project imported successfully",
       importFailed: "Failed to import project. Invalid file."
     },
     nav: {
       studio: "Workspace",
       glossary: "Terminology",
-      agents: "Agent Hub",
+      agents: "Chats",
       drive: "Save to Drive",
       expand: "Expand Sidebar",
       collapse: "Collapse Sidebar",
       hide: "Hide Sidebar",
       show: "Show Sidebar",
-      data: "Data Management"
+      pin: "Pin Sidebar",
+      data: "Data Management",
+      modeLight: "Light",
+      modeDark: "Dark",
+      hideBtn: "Hide"
     },
     projects: {
         title: "My Projects",
@@ -63,9 +72,9 @@ export const translations = {
         untitled: "Untitled Project",
         lastEdited: "Last edited",
         deleteConfirm: "Are you sure you want to delete this project?",
-        empty: "No projects yet.",
+        empty: "No projects yet",
         createFirst: "Create your first project",
-        noSummary: "No summary available.",
+        noSummary: "No summary available",
         openBtn: "Open",
         backBtn: "Back to Projects",
         steps: {
@@ -109,7 +118,11 @@ export const translations = {
       devModeDesc: "In cloud IDEs (Bolt, StackBlitz), domain verification fails. To bypass, get a temporary token from Google OAuth Playground (Select Drive API v3) and paste it below.",
       devModePlaceholder: "Paste Access Token (ya29...)",
       devModeActive: "Manual Token Active - OAuth origin check bypassed.",
-      devModeOptional: "Optional if using Dev Token"
+      devModeOptional: "Optional if using Dev Token",
+      agentSection: "AI Agent Persona",
+      agentInstruction: "System Instruction (Prompt)",
+      agentInstructionPlaceholder: "You are a helpful assistant...",
+      agentInstructionHelp: "Define the persona and behavior of the chat assistant. Leave empty for default."
     },
     upload: {
       title: "Step 1: Upload Materials",
@@ -129,6 +142,11 @@ export const translations = {
       fileTypeSrt: ".SRT, .VTT, .ASS, .JSON",
       srTWarningTitle: "Notice regarding Subtitle & AI Analysis",
       srtWarningDesc: "Without a subtitle file, AI cannot perform text-based analysis or timestamp correction. Local media files are used for preview only and are NOT uploaded to the AI. You can still proceed for manual review or to use the Agent.",
+      prePromptTitle: "AI Context & Instructions",
+      prePromptDesc: "Provide background info to guide the AI before analysis starts.",
+      contextLabel: "Background / Instructions",
+      contextPlaceholder: "E.g. 'Speaker has a Scottish accent', 'Topic is Quantum Physics', 'Keep slang terms'.",
+      outputLangLabel: "Primary Output Language"
     },
     analysis: {
       loadingTitle: "Analyzing Content...",
@@ -143,8 +161,8 @@ export const translations = {
       agenda: "Agenda",
       step3Title: "Step 2: Smart Proofread",
       needsAttention: "items need attention",
-      extraContextLabel: "AI Instructions / Context",
-      extraContextPlaceholder: "E.g., 'The speaker has a heavy accent', 'Use British spelling', or add specific background info...",
+      extraContextLabel: "Re-analyze Instructions",
+      extraContextPlaceholder: "E.g. 'You missed the company name', 'Re-check timestamps'...",
       glossaryBtn: "Select Glossary",
       reAnalyzeBtn: "AI Re-check",
       fixTimeBtn: "Fix Timestamps",
@@ -163,7 +181,8 @@ export const translations = {
         type: "Type",
         status: "Status",
         remarks: "User Note",
-        detail: "Edit"
+        detail: "Edit",
+        addNotePlaceholder: "Add note for AI..."
       },
       statusOptions: {
         verified: "✅ Verified",
@@ -178,7 +197,7 @@ export const translations = {
         title: "Edit Term Detail",
         context: "Context Preview",
         aiReason: "AI Reason / Original Note",
-        userNote: "Your Note / Instruction",
+        userNote: "Your Note / Instruction (For AI Re-check)",
         correction: "Correction",
         save: "Save Changes"
       },
@@ -190,20 +209,52 @@ export const translations = {
         skip: "Skip"
       },
       extractModal: {
-        title: "Extract Terms to Glossary",
-        desc: "Extract the current validated terms into a glossary set for future reuse.",
+        title: "Extract Verified Terms",
+        desc: "Save the current 'Verified' terms to a glossary set for future consistency.",
         newSet: "Create New Set",
         addTo: "Add to Existing Set",
         confirm: "Extract",
         cancel: "Cancel",
-        processing: "Processing in background..."
+        processing: "Processing...",
+        success: "Terms extracted successfully!"
       },
       instructionModal: {
         title: "AI Instructions & Context",
         desc: "Provide extra context or rules for the AI (e.g., 'Speaker is from Boston', 'Keep slang').",
         placeholder: "Enter instructions...",
         save: "Save & Apply"
+      },
+      realtimeSteps: {
+        init: "Preparing Environment",
+        connect: "Connecting to AI",
+        streaming: "Streaming Analysis",
+        parsing: "Structuring Data",
+        dataReceived: "Data Received",
+        waiting: "Waiting for stream start..."
+      },
+      terminal: {
+        logFile: "AI_OutputStream.log",
+        waiting: "Initializing connection..."
+      },
+      success: {
+        title: "Analysis Complete",
+        redirect: "Entering Workspace..."
       }
+    },
+    generation: {
+        loadingTitle: "Generating Content...",
+        writing: "AI Writing...",
+        steps: {
+            prep: "Preparing context...",
+            think: "AI is thinking & drafting...",
+            stream: "Receiving content stream..."
+        },
+        progressStages: {
+            init: "Initializing Context...",
+            drafting: "AI is Thinking...",
+            polishing: "Streaming Content...",
+            finalizing: "Finalizing..."
+        }
     },
     videoControls: {
       prev: "Prev Line",
@@ -217,7 +268,10 @@ export const translations = {
       layoutOverlay: "Overlay Layout",
       layoutSide: "Side-by-Side Layout",
       switchToAudio: "Switch to Audio",
-      switchToVideo: "Switch to Video"
+      switchToVideo: "Switch to Video",
+      sync: "Auto-Scroll Sync",
+      pip: "Picture-in-Picture",
+      transcript: "Caption List"
     },
     glossary: {
       title: "Terminology Management",
@@ -281,13 +335,16 @@ export const translations = {
       driveSync: "Sync to Drive"
     },
     agents: {
-      title: "Agent Hub",
-      subtitle: "Manage your specialized AI agents and conversation history.",
+      title: "Chats",
+      subtitle: "Manage your AI conversation history.",
       newChat: "New Chat",
       placeholder: "Select a chat to start messaging...",
       searchPlaceholder: "Search conversations...",
       modelSelect: "Model",
-      toggleSidebar: "Toggle Sidebar"
+      toggleSidebar: "Toggle Sidebar",
+      deleteConfirmTitle: "Delete Chat",
+      deleteConfirmMessage: "Are you sure you want to delete this conversation? This action cannot be undone.",
+      pressEnter: "Enter to send"
     },
     srt: {
       title: "Step 3: Generate Polished Subtitle",
@@ -300,25 +357,32 @@ export const translations = {
       exportBtn: "Export Markdown",
       waiting: "Waiting for generation to start...",
       complete: "Transcription Complete",
-      startNew: "Start New Task"
+      resetProject: "Redo / Reset Project",
+      resumeScroll: "Resume Auto-Scroll"
     },
     chat: {
-      title: "VerbaFlow Assistant",
-      newChat: "New",
-      history: "History",
-      backToChat: "Back to Chat",
-      inputPlaceholder: "Ask me anything...",
+      title: "AI Assistant",
+      newChat: "New Chat",
+      history: "Recent Chats",
+      backToChat: "Back",
+      inputPlaceholder: "Ask me to check consistency or explain terms...",
       send: "Send",
       model: "Model",
       rename: "Rename",
       delete: "Delete",
       saveTitle: "Save",
-      welcomeTitle: "VerbaFlow AI Assistant",
-      welcomeSubtitle: "I am your integrated AI assistant. Feel free to ask about the app, check terminology, or discuss any topic.",
+      welcomeTitle: "AI Assistant",
+      welcomeSubtitle: "I am your intelligent assistant. I can help verify terminology, polish logic, or answer context-specific questions.",
       startBtn: "Start Conversation",
       export: "Export Chat",
       fullscreen: "Full Screen",
-      exitFullscreen: "Exit Full Screen"
+      exitFullscreen: "Exit Full Screen",
+      suggestions: {
+          check: "Check consistency",
+          explain: "Explain technical term",
+          polish: "Polish current segment",
+          summarize: "Summarize transcript"
+      }
     },
     data: {
       title: "Data Management",
@@ -332,7 +396,30 @@ export const translations = {
       count: "Items",
       unit: "items",
       unitSets: "sets",
-      empty: "No data stored."
+      empty: "No data stored.",
+      clearConfirmTitle: "Clear Data",
+      clearConfirmMessage: "Are you sure you want to delete all data in {target}? This cannot be undone."
+    },
+    driveSelector: {
+        browse: "Browse",
+        pasteLink: "Paste Link",
+        searchPlaceholder: "Search all files...",
+        filterVideos: "Filter: Videos",
+        filterAudio: "Filter: Audio",
+        filterSubtitles: "Filter: Subtitles",
+        filterAll: "Filter: All Files",
+        loading: "Loading...",
+        accessError: "Access Error",
+        emptyFolder: "Empty Folder",
+        noResults: "No results found",
+        scopeIssue: "Potential Scope Issue",
+        scopeIssueDesc: "Can't see your files? You may have limited the app's access permissions.",
+        fixPermissions: "Fix Permissions (Re-login)",
+        manualInstruction: "Paste a Google Drive sharing link or file ID directly.",
+        manualPlaceholder: "https://drive.google.com/file/d/...",
+        loadFile: "Load File",
+        reAuthTitle: "Google Drive Re-Authorization",
+        reAuthMessage: "This will open the Google Auth window again. Please ensure you check the box for 'See and download all your Google Drive files'."
     },
     errors: {
       analysisFailed: "Analysis failed. Please check API Key.",
@@ -350,17 +437,22 @@ export const translations = {
       rename: "重命名",
       save: "保存",
       processing: "处理中...",
-      unknownError: "发生未知错误"
+      unknownError: "发生未知错误",
+      retry: "重试",
+      back: "返回",
+      default: "默认"
     },
     messages: {
-      projectCreated: "项目创建成功！",
-      projectCreateFailed: "项目创建失败。",
-      projectLoaded: "项目已加载。",
-      projectLoadFailed: "项目加载失败。",
-      deleteFailed: "删除项目失败。",
-      reAnalysisComplete: "重新分析完成。",
-      reAnalysisFailed: "重新分析失败。",
-      workspaceReset: "工作区已重置为第一步。",
+      projectCreated: "项目创建成功",
+      projectCreateFailed: "项目创建失败",
+      projectLoaded: "项目已加载",
+      projectLoadFailed: "项目加载失败",
+      deleteFailed: "删除项目失败",
+      reAnalysisComplete: "重新分析完成",
+      reAnalysisFailed: "重新分析失败",
+      workspaceReset: "工作区已重置为第一步",
+      restartConfirmTitle: "重置当前项目",
+      restartConfirmMessage: "确定要重置当前项目吗？这将清除第二步至第四步的所有生成数据，但保留原始素材。",
       exportLimited: "多项目模式下备份功能受限，建议使用 IndexedDB。",
       importUpdating: "导入功能正在升级中。",
       driveSaveDisabled: "Drive 保存功能暂时停用。",
@@ -368,28 +460,32 @@ export const translations = {
       generationFailed: "生成失败。",
       extractSuccess: "成功提取 {n} 个术语！",
       extractFailed: "提取失败。",
-      noTermsFound: "未找到已确认的术语。",
-      noTermsExtracted: "AI 未提取到任何术语。",
+      noTermsFound: "未找到已确认的术语",
+      noTermsExtracted: "AI 未提取到任何术语",
       timestampsFixed: "时间轴已根据 SRT 校准。",
       timestampsFailed: "校准时间轴失败。",
       syntaxErrorRepaired: "检测到语法错误，正在自动修复...",
       driveConfigMissing: "Google Drive 未配置。",
-      copySuccess: "已复制到剪贴板！",
-      sessionRenamed: "会话已重命名。",
-      exportSuccess: "项目已导出为 JSON。",
-      importSuccess: "项目导入成功！",
-      importFailed: "导入失败，文件格式无效。"
+      copySuccess: "已复制到剪贴板",
+      sessionRenamed: "会话已重命名",
+      exportSuccess: "项目已导出为 JSON",
+      importSuccess: "项目导入成功",
+      importFailed: "导入失败，文件格式无效"
     },
     nav: {
       studio: "智能工坊",
       glossary: "术语管理",
-      agents: "智能体中心",
+      agents: "会话中心",
       drive: "存至 Drive",
       expand: "展开侧边栏",
       collapse: "折叠",
       hide: "隐藏界面",
       show: "显示侧边栏",
-      data: "数据管理"
+      pin: "固定侧边栏",
+      data: "数据管理",
+      modeLight: "亮色",
+      modeDark: "深色",
+      hideBtn: "隐藏"
     },
     projects: {
         title: "我的项目",
@@ -400,9 +496,9 @@ export const translations = {
         untitled: "未命名项目",
         lastEdited: "最后编辑",
         deleteConfirm: "确定要删除此项目吗？",
-        empty: "暂无项目。",
+        empty: "暂无项目",
         createFirst: "创建您的第一个项目",
-        noSummary: "暂无摘要。",
+        noSummary: "暂无摘要",
         openBtn: "进入工作台",
         backBtn: "返回项目列表",
         steps: {
@@ -414,7 +510,6 @@ export const translations = {
     },
     steps: {
       upload: "上传素材",
-      // analysis: "智能分析", // Removed
       confirm: "智能校对",
       genSRT: "生成字幕",
       genMD: "生成文稿"
@@ -443,12 +538,15 @@ export const translations = {
       languageLabel: "输出语言",
       customModel: "自定义...",
       customPlaceholder: "例如：gemini-3-flash",
-      // Dev Mode
       devModeTitle: "开发者模式 / 临时访问令牌",
       devModeDesc: "在 Bolt/StackBlitz 等云端 IDE 中，Google 域名验证会失败。请前往 Google OAuth Playground (选择 Drive API v3) 获取临时 Access Token 并粘贴在下方。",
       devModePlaceholder: "粘贴 Access Token (ya29...)",
       devModeActive: "手动 Token 已激活 - 无需域名验证",
-      devModeOptional: "使用临时令牌时，此项可选"
+      devModeOptional: "使用临时令牌时，此项可选",
+      agentSection: "AI 助手人设",
+      agentInstruction: "系统指令 (System Prompt)",
+      agentInstructionPlaceholder: "你是一个乐于助人的助手...",
+      agentInstructionHelp: "定义 AI 助手的角色和行为模式。留空则使用默认 VerbaFlow 人设。"
     },
     upload: {
       title: "第一步：上传素材",
@@ -468,6 +566,11 @@ export const translations = {
       fileTypeSrt: ".SRT, .VTT, .ASS, .JSON",
       srTWarningTitle: "关于字幕文件与 AI 分析",
       srtWarningDesc: "未上传字幕文件将影响时间轴的精准定位和自动校对功能。本地音视频素材默认不上传至 AI，仅用于本地预览。您仍可进入工作台进行人工复核或使用 AI 助手。",
+      prePromptTitle: "AI 上下文与指令",
+      prePromptDesc: "在分析开始前提供背景信息，帮助 AI 更准确地识别术语。",
+      contextLabel: "背景说明 / 额外指令",
+      contextPlaceholder: "例如：'演讲者带有苏格兰口音'，'主题是量子物理'，'请保留俚语不翻译'。",
+      outputLangLabel: "主要输出语言"
     },
     analysis: {
       loadingTitle: "正在分析内容...",
@@ -482,8 +585,8 @@ export const translations = {
       agenda: "议程",
       step3Title: "第二步：智能复核与校对",
       needsAttention: "项需关注",
-      extraContextLabel: "额外说明 / 给 AI 的指令",
-      extraContextPlaceholder: "例如：'演讲者有口音'，'保留口语化表达'，或者补充背景信息...",
+      extraContextLabel: "重分析指令",
+      extraContextPlaceholder: "例如：'你漏掉了公司名称'，'重新检查时间轴'...",
       glossaryBtn: "选择术语库",
       reAnalyzeBtn: "AI 二次复核",
       fixTimeBtn: "校准时间",
@@ -501,8 +604,9 @@ export const translations = {
         corrected: "修正",
         type: "类型",
         status: "状态",
-        remarks: "用户备注/指令",
-        detail: "编辑"
+        remarks: "用户备注",
+        detail: "编辑",
+        addNotePlaceholder: "给 AI 添加备注..."
       },
       statusOptions: {
         verified: "✅ 已确认",
@@ -517,7 +621,7 @@ export const translations = {
         title: "编辑术语详情",
         context: "上下文预览",
         aiReason: "AI 原始分析/理由",
-        userNote: "您的备注 / 给 AI 的指令",
+        userNote: "您的备注 / 给 AI 的指令 (用于二次复核)",
         correction: "修正内容 (多行)",
         save: "保存更改"
       },
@@ -530,19 +634,51 @@ export const translations = {
       },
       extractModal: {
         title: "提取术语至库",
-        desc: "将当前已验证的术语提取到术语库集合中，以便未来复用。",
+        desc: "将当前“已确认 (Verified)”的术语提取到术语库集合中，以便未来复用。",
         newSet: "新建术语库",
         addTo: "添加到现有库",
         confirm: "后台提取",
         cancel: "取消",
-        processing: "AI 正在后台提取术语..."
+        processing: "AI 正在后台提取术语...",
+        success: "术语提取成功！"
       },
       instructionModal: {
         title: "AI 指令与上下文",
         desc: "为 AI 提供额外的背景信息或规则 (例如: '演讲者来自波士顿', '保留俚语', '不要翻译人名').",
         placeholder: "输入指令...",
         save: "保存并应用"
+      },
+      realtimeSteps: {
+        init: "正在准备运行环境...",
+        connect: "连接 AI 引擎...",
+        streaming: "正在实时分析...",
+        parsing: "正在结构化数据...",
+        dataReceived: "已接收数据",
+        waiting: "等待数据流启动..."
+      },
+      terminal: {
+        logFile: "AI_OutputStream.log (实时日志)",
+        waiting: "正在初始化连接..."
+      },
+      success: {
+        title: "分析完成",
+        redirect: "正在进入工作台..."
       }
+    },
+    generation: {
+        loadingTitle: "正在生成内容...",
+        writing: "AI 正在撰写...",
+        steps: {
+            prep: "正在准备上下文与历史记录...",
+            think: "AI 正在思考与构建草稿...",
+            stream: "正在接收内容流..."
+        },
+        progressStages: {
+            init: "正在准备上下文...",
+            drafting: "AI 思考中 (Chain of Thought)...",
+            polishing: "正在流式生成...",
+            finalizing: "正在完成..."
+        }
     },
     videoControls: {
         prev: "上一句",
@@ -555,8 +691,11 @@ export const translations = {
         captions: "显示/隐藏字幕",
         layoutOverlay: "悬浮字幕模式",
         layoutSide: "侧边字幕模式",
-        switchToAudio: "切换至音频",
-        switchToVideo: "切换至视频"
+        switchToAudio: "切换至音频模式 (歌词)",
+        switchToVideo: "切换至视频模式",
+        sync: "自动跟随/同步",
+        pip: "画中画模式",
+        transcript: "字幕列表"
     },
     glossary: {
       title: "术语库管理",
@@ -620,13 +759,16 @@ export const translations = {
       driveSync: "同步至 Drive"
     },
     agents: {
-      title: "智能体中心",
+      title: "会话中心",
       subtitle: "管理您的专用 AI 智能体和历史会话记录。",
       newChat: "新建会话",
       placeholder: "请选择一个会话开始消息...",
       searchPlaceholder: "搜索话题关键字...",
       modelSelect: "模型",
-      toggleSidebar: "显示/隐藏侧边栏"
+      toggleSidebar: "显示/隐藏侧边栏",
+      deleteConfirmTitle: "删除会话",
+      deleteConfirmMessage: "您确定要删除此对话吗？此操作无法撤销。",
+      pressEnter: "按 Enter 发送"
     },
     srt: {
       title: "第三步：生成精校字幕",
@@ -639,25 +781,32 @@ export const translations = {
       exportBtn: "导出 Markdown",
       waiting: "等待生成开始...",
       complete: "转写完成",
-      startNew: "开始新任务"
+      resetProject: "重置当前项目 (Redo)",
+      resumeScroll: "恢复自动滚动"
     },
     chat: {
       title: "语流助手",
-      newChat: "新建",
-      history: "历史记录",
-      backToChat: "返回对话",
-      inputPlaceholder: "有问题尽管问...",
+      newChat: "新建会话",
+      history: "近期对话",
+      backToChat: "返回",
+      inputPlaceholder: "请求检查术语一致性或解释上下文...",
       send: "发送",
       model: "模型",
       rename: "重命名",
       delete: "删除",
       saveTitle: "保存",
-      welcomeTitle: "VerbaFlow 语流助手",
-      welcomeSubtitle: "我是您的内置 AI 助手。您可以询问关于本应用的问题，查询术语，或者讨论任何话题。",
+      welcomeTitle: "语流智能助手",
+      welcomeSubtitle: "你好。我是您的语流助手，可以协助您检查术语一致性、润色文稿或解答相关问题。",
       startBtn: "开始对话",
       export: "导出对话",
       fullscreen: "全屏模式",
-      exitFullscreen: "退出全屏"
+      exitFullscreen: "退出全屏",
+      suggestions: {
+          check: "检查一致性",
+          explain: "解释专业术语",
+          polish: "润色当前段落",
+          summarize: "总结文稿要点"
+      }
     },
     data: {
       title: "数据存储管理",
@@ -671,7 +820,30 @@ export const translations = {
       count: "数量",
       unit: "项",
       unitSets: "个",
-      empty: "暂无存储数据"
+      empty: "暂无存储数据",
+      clearConfirmTitle: "清除数据",
+      clearConfirmMessage: "您确定要删除 {target} 中的所有数据吗？此操作无法撤销。"
+    },
+    driveSelector: {
+        browse: "浏览文件",
+        pasteLink: "粘贴链接",
+        searchPlaceholder: "搜索所有文件...",
+        filterVideos: "筛选: 视频",
+        filterAudio: "筛选: 音频",
+        filterSubtitles: "筛选: 字幕",
+        filterAll: "筛选: 所有文件",
+        loading: "加载中...",
+        accessError: "访问错误",
+        emptyFolder: "空文件夹",
+        noResults: "未找到结果",
+        scopeIssue: "可能存在权限范围问题",
+        scopeIssueDesc: "无法看到您的文件？您可能限制了应用的访问权限。",
+        fixPermissions: "修复权限 (重新登录)",
+        manualInstruction: "直接粘贴 Google Drive 分享链接或文件 ID。",
+        manualPlaceholder: "https://drive.google.com/file/d/...",
+        loadFile: "加载文件",
+        reAuthTitle: "Google Drive 重新授权",
+        reAuthMessage: "这将再次打开 Google 授权窗口。请确保勾选 '查看和下载所有 Google Drive 文件' 以修复权限问题。"
     },
     errors: {
       analysisFailed: "分析失败，请检查 API Key。",
