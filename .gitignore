@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Development tools and agent frameworks
+.ace-tool/
+.agent/
+.claude/
+.codex/
+.gemini/
+.opencode/
+.mcp.json
+CLAUDE.md
+_bmad/
+_bmad-output/

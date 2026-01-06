@@ -599,6 +599,7 @@ export const ChatWidget: React.FC<Props> = ({ externalPrompt, onClearExternalPro
                   </div>
               </div>
           </div>
+          </div>
       )}
     </>
   );
