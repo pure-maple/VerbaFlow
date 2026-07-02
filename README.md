@@ -60,7 +60,7 @@ Unlike cloud-based SaaS platforms, **VerbaFlow runs entirely in your browser**. 
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/pure-maple/VerbaFlow.git
+    git clone https://github.com/zleo-ai/VerbaFlow.git
     cd VerbaFlow
     ```
 
